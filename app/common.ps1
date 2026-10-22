@@ -166,7 +166,7 @@ function Update-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [
 }
 
 # ---------------- signed self-update ----------------
-# Manifest (JSON at UpdateUrl): { "version": "1.0.1", "url": "https://.../LinkGrab-app-1.0.1.zip", "signature": "<base64 RSA-SHA256 of the zip>", "notes": "..." }
+# Manifest (JSON at UpdateUrl): { "version": "1.0.1", "url": "https://.../ClipToast-app-1.0.1.zip", "signature": "<base64 RSA-SHA256 of the zip>", "notes": "..." }
 # The zip is only installed if its signature verifies against app\update-public-key.xml, so nobody
 # without your private key can push code to users - even if your hosting account is compromised.
 function Invoke-AppUpdate {

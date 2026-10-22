@@ -1,23 +1,26 @@
 # make-update.ps1 - package a new version of ClipToast and sign it.
 #
 # Usage (from repository root):
-#   .\make-update.ps1 -Version 1.0.1 -Notes "Fixed Instagram reels" `
-#        -BaseUrl "https://github.com/2harshpandey/ClipToast/releases/download/v1.0.1" `
-#        -PrivateKey ".\PRIVATE-update-signing-key.xml"
+#   powershell -ExecutionPolicy Bypass -File .\make-update.ps1 -Version 1.0.0 -Notes "Initial release"
 #
 # Output: ClipToast-app-<version>.zip and latest.json -> upload BOTH to the GitHub release.
 param(
     [Parameter(Mandatory)][string]$Version,
     [string]$BaseUrl = '',
-    [string]$PrivateKey = (Join-Path $PSScriptRoot 'PRIVATE-update-signing-key.xml'),
+    [string]$PrivateKey = '',
     [string]$Notes = '',
-    [string]$AppDir = (Join-Path $PSScriptRoot 'app'),
-    [string]$OutDir = (Join-Path $PSScriptRoot 'release')
+    [string]$AppDir = '',
+    [string]$OutDir = ''
 )
 $ErrorActionPreference = 'Stop'
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+if (-not $AppDir) { $AppDir = Join-Path $scriptDir 'app' }
+if (-not $OutDir) { $OutDir = Join-Path $scriptDir 'release' }
+if (-not $PrivateKey) { $PrivateKey = Join-Path $scriptDir 'PRIVATE-update-signing-key.xml' }
 if (-not $BaseUrl) {
     $BaseUrl = "https://github.com/2harshpandey/ClipToast/releases/download/v$Version"
 }
+
 if (-not (Test-Path $AppDir)) { throw "App folder not found: $AppDir" }
 if (-not (Test-Path $PrivateKey)) { throw "Private key not found: $PrivateKey" }
 [void][version]$Version   # validates the format, e.g. 1.0.1
