@@ -105,7 +105,7 @@ $txtUrl.Text = $cfg['UpdateUrl']
 $form.Controls.Add($txtUrl)
 
 # Buttons
-$lblVer = Add-Label ('Version ' + $AppVersion) 20 368 150
+[void](Add-Label ('Version ' + $AppVersion) 20 368 150)
 $btnCheck = New-Object System.Windows.Forms.Button
 $btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 325); $btnCheck.Size = New-Object System.Drawing.Size(150, 30)
 $form.Controls.Add($btnCheck)
