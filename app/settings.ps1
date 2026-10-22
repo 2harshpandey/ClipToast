@@ -7,6 +7,19 @@ Add-Type -AssemblyName System.Drawing
 
 $cfg = Read-Config
 
+# Set AppUserModelID so Windows taskbar groups and displays this window under ClipToast
+try {
+    Add-Type -TypeDefinition @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class ClipToastShell {
+        [DllImport("shell32.dll", SetLastError = true)]
+        public static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
+    }
+"@ -ErrorAction SilentlyContinue
+    [ClipToastShell]::SetCurrentProcessExplicitAppUserModelID("ClipToast")
+} catch {}
+
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'ClipToast - Settings'
 $form.ClientSize = New-Object System.Drawing.Size(520, 400)
@@ -14,6 +27,16 @@ $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+
+# High-quality icon for titlebar, taskbar, and Alt+Tab
+$iconPath = Join-Path $Root 'cliptoast.ico'
+if (-not (Test-Path -LiteralPath $iconPath)) { $iconPath = Join-Path $AppDir 'cliptoast.ico' }
+if (-not (Test-Path -LiteralPath $iconPath)) { $iconPath = Join-Path $PSScriptRoot 'cliptoast.ico' }
+if (Test-Path -LiteralPath $iconPath) {
+    try {
+        $form.Icon = New-Object System.Drawing.Icon($iconPath)
+    } catch {}
+}
 
 function Add-Label([string]$text, [int]$x, [int]$y, [int]$w = 480) {
     $l = New-Object System.Windows.Forms.Label
