@@ -66,6 +66,7 @@ Section "Install"
 
   SetOutPath "$INSTDIR"
   File "cliptoast.ico"
+  File "cliptoast.png"
   SetOutPath "$INSTDIR\app"
   File /r "app\*.*"
 
@@ -105,6 +106,11 @@ Section "Install"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1
+
+  ; Register AppUserModelId so Windows displays ClipToast name and icon for toast notifications
+  WriteRegStr HKCU "Software\Classes\AppUserModelId\ClipToast" "DisplayName" "${APP_NAME}"
+  WriteRegStr HKCU "Software\Classes\AppUserModelId\ClipToast" "IconUri" "$INSTDIR\cliptoast.png"
+  WriteRegDWORD HKCU "Software\Classes\AppUserModelId\ClipToast" "ShowInSettings" 1
 SectionEnd
 
 Section "Uninstall"
@@ -115,6 +121,7 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Link Downloader Settings.lnk"
   DeleteRegKey HKCU "${UNINST_KEY}"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LinkGrab"
+  DeleteRegKey HKCU "Software\Classes\AppUserModelId\ClipToast"
   SetOutPath "$TEMP"
   RMDir /r "$INSTDIR"
 SectionEnd

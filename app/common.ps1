@@ -4,7 +4,7 @@ $Root       = Split-Path -Parent $AppDir
 $Bin        = Join-Path $Root 'bin'
 $ConfigPath = Join-Path $Root 'config.txt'
 $LogPath    = Join-Path $Root 'log.txt'
-$ToastAppId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+$ToastAppId = 'ClipToast'
 $AppVersion = '0.0.0'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
@@ -82,6 +82,8 @@ function Format-Fraction([double]$f) {
 $script:ToastOK  = $false
 $script:Notifier = $null
 $script:ToastSeq = 1
+$script:LogoPath = ''
+$script:LogoUri  = ''
 
 function Initialize-Toast {
     try {
@@ -89,12 +91,44 @@ function Initialize-Toast {
         [void][Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime]
         [void][Windows.UI.Notifications.NotificationData, Windows.UI.Notifications, ContentType = WindowsRuntime]
         [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
-        $script:Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($ToastAppId)
-        $script:ToastOK = $true
+
+        # Locate ClipToast PNG logo
+        foreach ($candidate in @(
+            (Join-Path $Root 'cliptoast.png'),
+            (Join-Path $AppDir 'cliptoast.png'),
+            (Join-Path $env:LOCALAPPDATA 'ClipToast\cliptoast.png'),
+            (Join-Path $Root 'cliptoast.ico')
+        )) {
+            if (Test-Path -LiteralPath $candidate) {
+                $script:LogoPath = (Get-Item -LiteralPath $candidate).FullName
+                $script:LogoUri  = [Security.SecurityElement]::Escape(([Uri]$script:LogoPath).AbsoluteUri)
+                break
+            }
+        }
+
+        # Ensure AppUserModelId is registered in HKCU so Windows displays "ClipToast" as app title
+        try {
+            $regKey = 'HKCU:\Software\Classes\AppUserModelId\ClipToast'
+            if (-not (Test-Path -LiteralPath $regKey)) { New-Item -Path $regKey -Force | Out-Null }
+            Set-ItemProperty -Path $regKey -Name 'DisplayName' -Value 'ClipToast' -ErrorAction SilentlyContinue
+            if ($script:LogoPath) {
+                Set-ItemProperty -Path $regKey -Name 'IconUri' -Value $script:LogoPath -ErrorAction SilentlyContinue
+            }
+            Set-ItemProperty -Path $regKey -Name 'ShowInSettings' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+        } catch { Write-Log "AppUserModelId registration notice: $_" }
+
+        try {
+            $script:Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($ToastAppId)
+            $script:ToastOK = $true
+        } catch {
+            # Graceful fallback to PowerShell AUMID if custom registration fails
+            $script:Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe')
+            $script:ToastOK = $true
+        }
     } catch { $script:ToastOK = $false; Write-Log "Toast init failed: $_" }
 }
 
-function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'lg', [string]$FolderPath = '') {
+function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '') {
     if (-not $script:ToastOK) { return }
     try {
         $t = [Security.SecurityElement]::Escape($Title)
@@ -104,7 +138,11 @@ function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'lg', [string]
             $uri = [Security.SecurityElement]::Escape(([Uri]$FolderPath).AbsoluteUri)
             $actions = "<actions><action content='Open folder' arguments='$uri' activationType='protocol'/></actions>"
         }
-        $xml = "<toast><visual><binding template='ToastGeneric'><text>$t</text><text>$b</text></binding></visual>$actions</toast>"
+        $img = ''
+        if ($script:LogoUri) {
+            $img = "<image placement='appLogoOverride' hint-crop='circle' src='$($script:LogoUri)' />"
+        }
+        $xml = "<toast><visual><binding template='ToastGeneric'><text>$t</text><text>$b</text>$img</binding></visual>$actions</toast>"
         $doc = New-Object Windows.Data.Xml.Dom.XmlDocument
         $doc.LoadXml($xml)
         $toast = New-Object Windows.UI.Notifications.ToastNotification $doc
@@ -118,20 +156,25 @@ function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'lg', [string]
 function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
     if (-not $script:ToastOK) { return }
     try {
-        $xml = @'
+        $img = ''
+        if ($script:LogoUri) {
+            $img = "<image placement='appLogoOverride' hint-crop='circle' src='$($script:LogoUri)' />"
+        }
+        $xml = @"
 <toast scenario="reminder">
   <visual>
     <binding template="ToastGeneric">
       <text>ClipToast</text>
       <text>{headline}</text>
       <progress title="{pTitle}" value="{pValue}" valueStringOverride="{pValueText}" status="{pStatus}" />
+      $img
     </binding>
   </visual>
   <actions>
     <action content="Hide" arguments="dismiss" activationType="system" />
   </actions>
 </toast>
-'@
+"@
         $doc = New-Object Windows.Data.Xml.Dom.XmlDocument
         $doc.LoadXml($xml)
         $toast = New-Object Windows.UI.Notifications.ToastNotification $doc
