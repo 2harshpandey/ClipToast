@@ -1,0 +1,27 @@
+# Security: NEVER commit private update signing keys
+PRIVATE-update-signing-key.xml
+*.key
+*.pfx
+*.p12
+
+# Binaries and Compiled Installers
+*.exe
+*.msi
+bin/
+release/
+
+# Runtime and User State
+log.txt
+config.txt
+config.json
+*.log
+*.tmp
+
+# IDE and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Legacy artifacts
+LinkGrab-source-kit/
