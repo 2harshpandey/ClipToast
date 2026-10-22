@@ -152,6 +152,16 @@ function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]
     } catch { Write-Log "Show-Toast failed: $_" }
 }
 
+function New-NotificationData([string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status, [uint32]$Seq = 1) {
+    $dict = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+    $dict['headline']   = [string]$Headline
+    $dict['pTitle']     = [string]$Title
+    $dict['pValue']     = [string]$Value
+    $dict['pValueText'] = [string]$ValueText
+    $dict['pStatus']    = [string]$Status
+    return New-Object Windows.UI.Notifications.NotificationData ($dict, [uint32]$Seq)
+}
+
 # Progress toast: title line, progress bar, "42.1 MB / 118 MB (36%)" on the right, "5.2 MB/s - ETA 0:14" under the bar.
 function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
     if (-not $script:ToastOK) { return }
@@ -180,15 +190,8 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
         $toast = New-Object Windows.UI.Notifications.ToastNotification $doc
         $toast.Tag = $Tag
         $toast.Group = 'ClipToast'
-        $d = New-Object Windows.UI.Notifications.NotificationData
         $script:ToastSeq = 1
-        $d.SequenceNumber = [uint32]1
-        $d.Values['headline']   = $Headline
-        $d.Values['pTitle']     = $Title
-        $d.Values['pValue']     = $Value
-        $d.Values['pValueText'] = $ValueText
-        $d.Values['pStatus']    = $Status
-        $toast.Data = $d
+        $toast.Data = New-NotificationData $Headline $Title $Value $ValueText $Status 1
         $script:Notifier.Show($toast)
     } catch { Write-Log "Show-ProgressToast failed: $_" }
 }
@@ -196,14 +199,8 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
 function Update-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
     if (-not $script:ToastOK) { return }
     try {
-        $d = New-Object Windows.UI.Notifications.NotificationData
         $script:ToastSeq++
-        $d.SequenceNumber = [uint32]$script:ToastSeq
-        $d.Values['headline']   = $Headline
-        $d.Values['pTitle']     = $Title
-        $d.Values['pValue']     = $Value
-        $d.Values['pValueText'] = $ValueText
-        $d.Values['pStatus']    = $Status
+        $d = New-NotificationData $Headline $Title $Value $ValueText $Status $script:ToastSeq
         [void]$script:Notifier.Update($d, $Tag, 'ClipToast')
     } catch { Write-Log "Update-ProgressToast failed: $_" }
 }
