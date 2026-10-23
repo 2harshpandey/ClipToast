@@ -9,6 +9,8 @@ $yt      = Join-Path $Bin 'yt-dlp.exe'
 $ffmpeg  = Join-Path $Bin 'ffmpeg.exe'
 $ffprobe = Join-Path $Bin 'ffprobe.exe'
 $env:Path = "$Bin;$env:Path"      # lets yt-dlp find deno
+$tag = 'dl' + [guid]::NewGuid().ToString('N').Substring(0, 10)
+
 # Restore tray icon if user exited it previously and has StartWithWindows enabled
 if ($cfg['StartWithWindows'] -ne '0') {
     try {

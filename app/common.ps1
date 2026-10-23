@@ -155,6 +155,7 @@ function Initialize-Toast {
 
 function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '', [string]$FilePath = '', [string]$ReportTag = '') {
     if (-not $script:ToastOK) { return }
+    if ([string]::IsNullOrWhiteSpace($Tag)) { $Tag = 'ct' + [guid]::NewGuid().ToString('N').Substring(0, 8) }
     try {
         $t = [Security.SecurityElement]::Escape($Title)
         $b = [Security.SecurityElement]::Escape($Body)
@@ -209,6 +210,7 @@ function New-NotificationData([string]$Headline, [string]$Title, [string]$Value,
 # Progress toast: title line, progress bar, speed/ETA under the bar, with Cancel and Open folder buttons
 function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
     if (-not $script:ToastOK) { return }
+    if ([string]::IsNullOrWhiteSpace($Tag)) { $Tag = 'ct' + [guid]::NewGuid().ToString('N').Substring(0, 8) }
     try {
         $img = ''
         if ($script:LogoUri) {
@@ -248,7 +250,7 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
 }
 
 function Update-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
-    if (-not $script:ToastOK) { return }
+    if (-not $script:ToastOK -or [string]::IsNullOrWhiteSpace($Tag)) { return }
     try {
         $script:ToastSeq++
         $d = New-NotificationData $Headline $Title $Value $ValueText $Status $script:ToastSeq
