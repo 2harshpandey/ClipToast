@@ -165,7 +165,10 @@ function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]
             $actionList.Add("<action content='Play' arguments='cliptoast:play:$fB64' activationType='protocol'/>")
             $actionList.Add("<action content='Open folder' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
         } elseif ($FolderPath) {
-            $dPath = (Get-Item -LiteralPath $FolderPath).FullName
+            $dPath = $FolderPath
+            if (Test-Path -LiteralPath $FolderPath) {
+                $dPath = (Get-Item -LiteralPath $FolderPath).FullName
+            }
             $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
             $actionList.Add("<action content='Open folder' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
         }

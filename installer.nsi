@@ -128,6 +128,8 @@ SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
+  ; Stop running system tray instance before removing files
+  nsExec::Exec 'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.CommandLine -like ''*tray.ps1*'' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
   Delete "$SMPROGRAMS\ClipToast.lnk"
   Delete "$SMPROGRAMS\ClipToast Audio.lnk"
   Delete "$SMPROGRAMS\ClipToast Tray.lnk"

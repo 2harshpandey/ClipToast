@@ -328,7 +328,10 @@ if ($saved.Count -eq 0) {
     $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
     if (-not $mainFile) { $mainFile = $saved[0] }
     $title = if ($AudioOnly) { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
-    Show-Toast $title ("{0} files saved to {1}" -f $saved.Count, $dest) $tag $dest $mainFile
+    $hasSubs = ($saved | Where-Object { $_ -match '\.(srt|vtt)$' }).Count -gt 0
+    $subLabel = if ($hasSubs) { ' (+ subtitles)' } else { '' }
+    $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
+    Show-Toast $title ("{0}{1}  ({2})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 80), $subLabel, $size) $tag $dest $mainFile
 }
 Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
 Write-Log ('DONE ' + ($saved -join ' | '))

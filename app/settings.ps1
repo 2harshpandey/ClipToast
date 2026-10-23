@@ -159,6 +159,9 @@ function Save-Fields {
         Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f (Join-Path $AppDir 'run.vbs')) -ErrorAction SilentlyContinue
     } else {
         try { Remove-ItemProperty -Path $regRun -Name 'ClipToastTray' -ErrorAction SilentlyContinue } catch {}
+        try {
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        } catch {}
     }
 }
 

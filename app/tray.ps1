@@ -2,9 +2,15 @@
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-# Single instance enforcement
+# Single instance enforcement with AbandonedMutex resilience
 $mutexCreated = $false
-$mutex = New-Object System.Threading.Mutex($true, 'Local\ClipToast_Tray_Mutex', [ref]$mutexCreated)
+try {
+    $mutex = New-Object System.Threading.Mutex($true, 'Local\ClipToast_Tray_Mutex', [ref]$mutexCreated)
+} catch [System.Threading.AbandonedMutexException] {
+    $mutexCreated = $true
+} catch {
+    $mutexCreated = $false
+}
 if (-not $mutexCreated) {
     exit 0
 }
@@ -36,41 +42,51 @@ $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
 $itemVideo = $menu.Items.Add(("{0}  Download Video" -f $EmojiVideo))
 $itemVideo.Add_Click({
-    $vbs = Join-Path $AppDir 'run.vbs'
-    Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    try {
+        $vbs = Join-Path $AppDir 'run.vbs'
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    } catch { Write-Log "Tray Download Video failed: $_" }
 })
 
 $itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f $EmojiMusic))
 $itemAudio.Add_Click({
-    $vbs = Join-Path $AppDir 'run.vbs'
-    Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1 -AudioOnly' -f $vbs) -ErrorAction SilentlyContinue
+    try {
+        $vbs = Join-Path $AppDir 'run.vbs'
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1 -AudioOnly' -f $vbs) -ErrorAction SilentlyContinue
+    } catch { Write-Log "Tray Download MP3 failed: $_" }
 })
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
 $itemFolder = $menu.Items.Add(("{0}  Open Downloads Folder" -f $EmojiFolder))
 $itemFolder.Add_Click({
-    $cfg = Read-Config
-    $dir = [string]$cfg['DownloadDir']
-    if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
-    if (-not (Test-Path -LiteralPath $dir)) {
-        try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
-    }
-    Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $dir) -ErrorAction SilentlyContinue
+    try {
+        $cfg = Read-Config
+        $dir = [string]$cfg['DownloadDir']
+        if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
+        if (-not (Test-Path -LiteralPath $dir)) {
+            try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
+        }
+        Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $dir) -ErrorAction SilentlyContinue
+    } catch { Write-Log "Tray Open Folder failed: $_" }
 })
 
 $itemSettings = $menu.Items.Add(("{0}  Settings" -f $EmojiGear))
 $itemSettings.Add_Click({
-    $vbs = Join-Path $AppDir 'run.vbs'
-    Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" settings.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    try {
+        $vbs = Join-Path $AppDir 'run.vbs'
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" settings.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    } catch { Write-Log "Tray Settings failed: $_" }
 })
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
 $itemExit = $menu.Items.Add(("{0}  Exit" -f $EmojiExit))
 $itemExit.Add_Click({
-    $notifyIcon.Visible = $false
-    $notifyIcon.Dispose()
+    try {
+        $notifyIcon.Visible = $false
+        $notifyIcon.Dispose()
+    } catch {}
     if ($mutex) {
         try { $mutex.ReleaseMutex() } catch {}
         $mutex.Dispose()
@@ -84,16 +100,20 @@ $notifyIcon.ContextMenuStrip = $menu
 $notifyIcon.Add_MouseClick({
     param($sender, $e)
     if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-        $vbs = Join-Path $AppDir 'run.vbs'
-        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+        try {
+            $vbs = Join-Path $AppDir 'run.vbs'
+            Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+        } catch { Write-Log "Tray Click failed: $_" }
     }
 })
 
 try {
     [System.Windows.Forms.Application]::Run()
 } finally {
-    $notifyIcon.Visible = $false
-    $notifyIcon.Dispose()
+    try {
+        $notifyIcon.Visible = $false
+        $notifyIcon.Dispose()
+    } catch {}
     if ($mutex) {
         try { $mutex.ReleaseMutex() } catch {}
         $mutex.Dispose()
