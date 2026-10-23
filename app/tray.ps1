@@ -98,8 +98,8 @@ $notifyIcon.ContextMenuStrip = $menu
 
 # Left-click immediately triggers download for clipboard link
 $notifyIcon.Add_MouseClick({
-    param($src, $e)
-    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+    param($src, $evt)
+    if ($evt.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
             $vbs = Join-Path $AppDir 'run.vbs'
             Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
