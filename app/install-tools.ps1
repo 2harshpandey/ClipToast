@@ -1,4 +1,4 @@
-# install-tools.ps1 - downloads yt-dlp, ffmpeg + ffprobe and deno into <ClipToast>\bin
+﻿# install-tools.ps1 - downloads yt-dlp, ffmpeg + ffprobe and deno into <ClipToast>\bin
 param([switch]$Force)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')

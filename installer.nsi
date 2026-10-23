@@ -30,7 +30,7 @@ Var DownloadDir
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "Copy any video or audio link from YouTube, Instagram, TikTok, Reddit, Twitter/X, or 1,000+ supported sites:$\r$\n$\r$\n  * Ctrl+Alt+G  -  Download WhatsApp-ready MP4 Video$\r$\n  * Ctrl+Alt+A  -  Download 320kbps MP3 Audio with cover art$\r$\n  * System Tray -  Click the ClipToast icon near your clock$\r$\n$\r$\nSetup takes a moment to configure the media engine. No administrator rights needed."
+!define MUI_WELCOMEPAGE_TEXT "Copy any video or audio link from YouTube, Instagram, TikTok, Reddit, Twitter/X, or 1,000+ supported sites:$\r$\n$\r$\n  * Ctrl+Alt+G               -  Download WhatsApp-ready MP4 Video$\r$\n  * Ctrl+Alt+A / Ctrl+Alt+M  -  Download 320kbps MP3 Audio with cover art$\r$\n  * System Tray              -  Click the ClipToast icon near your clock$\r$\n$\r$\nSetup takes a moment to configure the media engine. No administrator rights needed."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirPre
@@ -44,7 +44,7 @@ Var DownloadDir
 !insertmacro MUI_PAGE_INSTFILES
 
 !define MUI_FINISHPAGE_TITLE "You're all set"
-!define MUI_FINISHPAGE_TEXT "To download: copy any media link, then:$\r$\n$\r$\n  * Press Ctrl+Alt+G for Video (MP4)$\r$\n  * Press Ctrl+Alt+A for Audio (320k MP3)$\r$\n  * Or click the ClipToast tray icon near your clock!$\r$\n$\r$\nClipToast runs quietly in the background with live toast notifications."
+!define MUI_FINISHPAGE_TEXT "To download: copy any media link, then:$\r$\n$\r$\n  * Press Ctrl+Alt+G for Video (MP4)$\r$\n  * Press Ctrl+Alt+A (or Ctrl+Alt+M) for Audio (320k MP3)$\r$\n  * Or click the ClipToast tray icon near your clock!$\r$\n$\r$\nClipToast runs quietly in the background with live toast notifications."
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -91,7 +91,8 @@ Section "Install"
   SetOutPath "$INSTDIR"
   ; Create Start menu shortcuts (with global hotkeys)
   CreateShortCut "$SMPROGRAMS\ClipToast.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|G "ClipToast - Download video from clipboard (MP4)"
-  CreateShortCut "$SMPROGRAMS\ClipToast Audio.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1 -AudioOnly' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|A "ClipToast - Download audio only as 320kbps MP3"
+  CreateShortCut "$SMPROGRAMS\ClipToast Audio.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1 -AudioOnly' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|A "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+A)"
+  CreateShortCut "$SMPROGRAMS\ClipToast Audio (M).lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1 -AudioOnly' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|M "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+M)"
   CreateShortCut "$SMPROGRAMS\ClipToast Tray.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" tray.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "ClipToast System Tray Icon"
   CreateShortCut "$SMPROGRAMS\ClipToast Settings.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" settings.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "Settings and updates for ClipToast"
 
@@ -132,6 +133,7 @@ Section "Uninstall"
   nsExec::Exec 'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.CommandLine -like ''*tray.ps1*'' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
   Delete "$SMPROGRAMS\ClipToast.lnk"
   Delete "$SMPROGRAMS\ClipToast Audio.lnk"
+  Delete "$SMPROGRAMS\ClipToast Audio (M).lnk"
   Delete "$SMPROGRAMS\ClipToast Tray.lnk"
   Delete "$SMPROGRAMS\ClipToast Settings.lnk"
   Delete "$SMPROGRAMS\Link Downloader.lnk"

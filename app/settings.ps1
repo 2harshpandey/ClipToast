@@ -119,7 +119,7 @@ $chkU.Checked = ([string]$cfg['AutoUpdate'] -ne '0')
 $form.Controls.Add($chkU)
 
 # Quick Shortcuts Banner
-$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A (320k MP3 Audio)' 20 262 480
+$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A / Ctrl+Alt+M (Audio MP3)' 20 262 480
 $lblHotkeys.ForeColor = [System.Drawing.Color]::FromArgb(30, 90, 180)
 $lblSites = Add-Label 'Supports 1,000+ sites: YouTube, Instagram, TikTok, Reddit, Twitter/X, Pinterest...' 20 282 480
 $lblSites.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)

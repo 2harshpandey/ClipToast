@@ -15,7 +15,7 @@
 
 - ⌨️ **Dual Global Hotkeys**:
   - **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd>**: Downloads highest quality video converted to universal WhatsApp-ready MP4.
-  - **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>A</kbd>**: Extracts clean **320kbps MP3 Audio** with embedded cover art and metadata (perfect for songs, podcast clips, and Lo-Fi mixes).
+  - **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>A</kbd>** *(or **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd>***)*: Extracts clean **320kbps MP3 Audio** with embedded cover art and metadata (perfect for songs, podcast clips, and Lo-Fi mixes).
 - 🕒 **System Tray Icon (Taskbar Clock)**:
   - **Left-Click**: Instantly downloads the media link currently copied in your clipboard.
   - **Right-Click Menu**: Quick access to Video Download, MP3 Extraction, Downloads Folder, Settings, and Exit.
@@ -67,7 +67,7 @@ Because ClipToast is powered by `yt-dlp`, it supports virtually every media site
 1. **Copy any media link** to your clipboard (YouTube, Instagram, TikTok, Reddit, etc.).
 2. **Trigger the download**:
    - Press **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>G</kbd>** for **Video (MP4)**
-   - Press **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>A</kbd>** for **Audio (320kbps MP3)**
+   - Press **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>A</kbd>** (or **<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd>**) for **Audio (320kbps MP3)**
    - Or click the **ClipToast tray icon** near the clock.
 3. A Windows Toast Notification will track speed, progress %, and media encoding.
    - Click **"Cancel"** at any time to abort the download.
