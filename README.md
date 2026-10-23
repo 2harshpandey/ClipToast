@@ -9,6 +9,13 @@
 
 > **ClipToast** is a lightning-fast, zero-friction background media downloader for Windows 11 and Windows 10. Copy any video or music link, press a global hotkey or click the tray icon near your clock, and ClipToast grabs the media in the background with interactive Windows toast notifications.
 
+<br/>
+
+<div align="center">
+  <img src="assets/demo.gif" alt="ClipToast Live Download Progress in Windows Toast" width="680" />
+  <p><em>Real-time download progress bar, speed, ETA, and 1-click controls right inside Windows toast notifications.</em></p>
+</div>
+
 ---
 
 ## ⚡ Highlights
@@ -90,15 +97,26 @@ If you prefer not to run an installer:
 
 ---
 
-## ⚙️ Settings
- 
-Access settings anytime via the system tray icon (**Right-click -> Settings**) or Start Menu (**ClipToast Settings**):
-- **Download folder**: Customize destination directory.
-- **Maximum video quality**: Cap resolutions at 1080p (recommended for speed) or leave unconstrained (up to 4K / 8K).
-- **Subtitles**: Toggle automatic subtitle (.srt) saving alongside video.
-- **System tray & Startup**: Run ClipToast near the Windows clock on startup, or click **"Start Tray Now"** anytime to immediately launch the tray icon.
-- **Browser login cookies**: Select your browser to access account-locked or Instagram-walled videos.
-- **Update preferences**: Toggle auto-updates or click **Check for updates** anytime.
+## ⚙️ Settings & System Tray Menu
+
+<div align="center">
+  <img src="assets/tray-menu.png" alt="ClipToast System Tray Menu" width="300" />
+</div>
+
+<br/>
+
+Access quick media actions and settings anytime via the system tray icon near your clock (**Right-click -> Menu**) or Start Menu (**ClipToast Settings**):
+- **Download Video**: Instantly grabs and converts the copied clipboard link to WhatsApp-ready MP4.
+- **Download MP3 Audio Only**: Extracts high-fidelity 320kbps MP3 audio with cover art.
+- **Open Downloads Folder**: Quick 1-click access to your downloaded media in File Explorer.
+- **Settings**:
+  - **Download folder**: Customize destination directory.
+  - **Maximum video quality**: Cap resolutions at 1080p (recommended for speed) or leave unconstrained (up to 4K / 8K).
+  - **Subtitles**: Toggle automatic subtitle (.srt) saving alongside video.
+  - **System tray & Startup**: Run ClipToast near the Windows clock on startup, or click **"Start Tray Now"** anytime to immediately launch the tray icon.
+  - **Browser login cookies**: Select your browser to access account-locked or Instagram-walled videos.
+  - **Update preferences**: Toggle auto-updates or click **Check for updates** anytime.
+- **Exit**: Cleanly exits the tray listener (automatically restored on your next hotkey download).
 
 > **💡 Exited the tray icon?** You can restore it anytime in 3 effortless ways:
 > 1. Open **ClipToast Settings** and click **Start Tray Now**.
@@ -125,6 +143,9 @@ ClipToast/
 │   ├── cliptoast.ico         # Notification & tray icon
 │   ├── cliptoast.png         # Modern toast logo
 │   └── version.txt           # App version manifest (1.1.0)
+├── assets/                   # Visual documentation & preview media
+│   ├── demo.gif              # Live toast download progress animation
+│   └── tray-menu.png         # System tray context menu preview
 ├── release/                  # GitHub Release assets (built artifacts)
 │   ├── ClipToastSetup-v1.1.exe       # Standalone installer wizard
 │   ├── ClipToast-v1.1.0-portable.zip # Zero-install portable edition
