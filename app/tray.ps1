@@ -65,7 +65,7 @@ $itemFolder.Add_Click({
         $dir = [string]$cfg['DownloadDir']
         if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
         if (-not (Test-Path -LiteralPath $dir)) {
-            try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
+            try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch { $null = $_ }
         }
         Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $dir) -ErrorAction SilentlyContinue
     } catch { Write-Log "Tray Open Folder failed: $_" }
@@ -86,9 +86,9 @@ $itemExit.Add_Click({
     try {
         $notifyIcon.Visible = $false
         $notifyIcon.Dispose()
-    } catch {}
+    } catch { $null = $_ }
     if ($mutex) {
-        try { $mutex.ReleaseMutex() } catch {}
+        try { $mutex.ReleaseMutex() } catch { $null = $_ }
         $mutex.Dispose()
     }
     [System.Windows.Forms.Application]::Exit()
@@ -98,8 +98,7 @@ $notifyIcon.ContextMenuStrip = $menu
 
 # Left-click immediately triggers download for clipboard link
 $notifyIcon.Add_MouseClick({
-    param($src, $evt)
-    if ($evt.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+    if ($args.Count -ge 2 -and $args[1].Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
             $vbs = Join-Path $AppDir 'run.vbs'
             Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
@@ -113,9 +112,9 @@ try {
     try {
         $notifyIcon.Visible = $false
         $notifyIcon.Dispose()
-    } catch {}
+    } catch { $null = $_ }
     if ($mutex) {
-        try { $mutex.ReleaseMutex() } catch {}
+        try { $mutex.ReleaseMutex() } catch { $null = $_ }
         $mutex.Dispose()
     }
 }
