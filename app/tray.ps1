@@ -30,7 +30,9 @@ using System.Runtime.InteropServices;
 public class ClipToastHotkeys {
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
+    private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
+    private const int WM_SYSKEYUP = 0x0105;
     private const int VK_MENU = 0x12;    // Alt
     private const int VK_CONTROL = 0x11; // Ctrl
     private const int VK_A = 0x41;
@@ -85,25 +87,36 @@ public class ClipToastHotkeys {
     }
 
     private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam) {
-        if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN)) {
-            int vkCode = Marshal.ReadInt32(lParam);
-            bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            bool alt  = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        if (nCode >= 0) {
+            int msg = wParam.ToInt32();
+            if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN || msg == WM_KEYUP || msg == WM_SYSKEYUP) {
+                int vkCode = Marshal.ReadInt32(lParam);
+                bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                bool alt  = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
 
-            if (ctrl && alt) {
-                long now = DateTime.UtcNow.Ticks;
-                // 1.2 second debounce to prevent rapid fire
-                if ((now - _lastTick) > 12000000L) {
+                if (ctrl && alt) {
                     if (vkCode == VK_G) {
-                        _lastTick = now;
-                        if (OnHotkeyAction != null) {
-                            OnHotkeyAction("video");
+                        if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
+                            long now = DateTime.UtcNow.Ticks;
+                            if ((now - _lastTick) > 12000000L) {
+                                _lastTick = now;
+                                if (OnHotkeyAction != null) {
+                                    OnHotkeyAction("video");
+                                }
+                            }
                         }
+                        return (IntPtr)1; // Consume keystroke so Windows Explorer does not launch a second instance
                     } else if (vkCode == VK_A || vkCode == VK_M) {
-                        _lastTick = now;
-                        if (OnHotkeyAction != null) {
-                            OnHotkeyAction("audio");
+                        if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
+                            long now = DateTime.UtcNow.Ticks;
+                            if ((now - _lastTick) > 12000000L) {
+                                _lastTick = now;
+                                if (OnHotkeyAction != null) {
+                                    OnHotkeyAction("audio");
+                                }
+                            }
                         }
+                        return (IntPtr)1; // Consume keystroke
                     }
                 }
             }

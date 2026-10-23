@@ -70,18 +70,43 @@ if (-not $url) {
 }
 Write-Log "START url=$url AudioOnly=$AudioOnly"
 
+# Prevent duplicate concurrent downloads of the exact same URL within 4 seconds
+$nowUnix = Get-UnixNow
+$duplicateFound = $false
+try {
+    Get-ChildItem -Path $env:TEMP -Filter "cliptoast_task_*.json" -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $tData = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            if ($tData.pid -ne $PID -and $tData.url -eq $url -and [bool]$tData.audioOnly -eq [bool]$AudioOnly) {
+                $p = Get-Process -Id $tData.pid -ErrorAction SilentlyContinue
+                if ($p -and ($nowUnix - [int64]$tData.time) -lt 4) {
+                    $duplicateFound = $true
+                }
+            }
+        } catch {}
+    }
+} catch {}
+
+if ($duplicateFound) {
+    Write-Log "Ignoring duplicate download trigger for $url (already running in another process)"
+    exit 0
+}
+
 $Work = Join-Path $env:TEMP ('cliptoast_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $Out  = Join-Path $Work 'out'
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $dest = $cfg['DownloadDir']
 
-# Register task state for Cancel action in toast
+# Register task state for Cancel action in toast and duplicate prevention
 $taskFile = Join-Path $env:TEMP ("cliptoast_task_" + $tag + ".json")
 try {
     @{
-        pid  = $PID
-        tag  = $tag
-        work = $Work
+        pid       = $PID
+        tag       = $tag
+        work      = $Work
+        url       = $url
+        audioOnly = [bool]$AudioOnly
+        time      = $nowUnix
     } | ConvertTo-Json | Set-Content -LiteralPath $taskFile -Encoding UTF8
 } catch {}
 
