@@ -1,5 +1,5 @@
-# downloader.ps1 - takes the link from the clipboard and downloads it in the background
-param([switch]$NoUpdateCheck)
+﻿# downloader.ps1 - takes the link from the clipboard and downloads it in the background
+param([switch]$NoUpdateCheck, [switch]$AudioOnly, [string]$InputUrl)
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Initialize-Toast
@@ -23,9 +23,11 @@ if (-not $NoUpdateCheck -and $cfg['AutoUpdate'] -ne '0') {
     $u = Invoke-AppUpdate
     if ($u.Status -eq 'updated') {
         Show-Toast ('ClipToast updated to ' + $u.Version) ([string]$u.Notes) 'ctupdate'
-        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
-            '-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+        $reArgs = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
             '-File', ('"{0}"' -f (Join-Path $AppDir 'downloader.ps1')), '-NoUpdateCheck')
+        if ($AudioOnly) { $reArgs += '-AudioOnly' }
+        if ($InputUrl)  { $reArgs += @('-InputUrl', ('"{0}"' -f $InputUrl)) }
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $reArgs
         exit 0
     }
 }
@@ -41,37 +43,78 @@ if (((Get-UnixNow) - $lastY) -gt 259200) {
 }
 
 # ---------- 3. read the link ----------
-$clip = Get-Clipboard -Raw
-$m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
-if (-not $m.Success) { Show-Toast 'ClipToast' 'No link found in the clipboard. Copy a link first, then try again.' $tag; exit 1 }
-$url = $m.Value
-Write-Log "START $url"
+$url = ''
+if ($InputUrl) {
+    $m = [regex]::Match([string]$InputUrl, 'https?://[^\s"<>]+')
+    if ($m.Success) { $url = $m.Value }
+}
+if (-not $url) {
+    $clip = Get-Clipboard -Raw
+    $m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
+    if ($m.Success) { $url = $m.Value }
+}
+if (-not $url) {
+    Show-Toast 'ClipToast' 'No link found in clipboard. Copy a YouTube, Instagram, or media link first, then try again.' $tag
+    exit 1
+}
+Write-Log "START url=$url AudioOnly=$AudioOnly"
 
 $Work = Join-Path $env:TEMP ('cliptoast_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $Out  = Join-Path $Work 'out'
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $dest = $cfg['DownloadDir']
 
-Show-ProgressToast $tag 'Starting download...' (Limit-Text $url 60) 'indeterminate' '' 'Contacting the site...'
+# Register task state for Cancel action in toast
+$taskFile = Join-Path $env:TEMP ("cliptoast_task_" + $tag + ".json")
+try {
+    @{
+        pid  = $PID
+        tag  = $tag
+        work = $Work
+    } | ConvertTo-Json | Set-Content -LiteralPath $taskFile -Encoding UTF8
+} catch {}
 
-# ---------- 4. download: best video + best audio ----------
-$h = ''
-if ([int](ConvertTo-Num $cfg['MaxHeight']) -gt 0) { $h = '[height<=' + [int](ConvertTo-Num $cfg['MaxHeight']) + ']' }
-# Prefer SDR (HDR -> SDR conversion looks washed out), then anything.
-$fmt = "bv*${h}[dynamic_range=SDR]+ba/bv*${h}+ba/b${h}"
-$ytArgs = @(
-    '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
-    '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
-    '-f', $fmt,
-    '-S', 'res,fps,vcodec:h264,abr',     # highest resolution, then fps, then prefer H.264 (no re-encode), then best audio
-    '--merge-output-format', 'mkv',
-    '--concurrent-fragments', '8',
-    '--windows-filenames',
-    '--ffmpeg-location', $Bin,
-    '-P', $Work,
-    '-o', '%(title).100B [%(id)s].%(ext)s',
-    '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
-)
+$headline = if ($AudioOnly) { 'Starting audio download (MP3)...' } else { 'Starting download...' }
+Show-ProgressToast $tag $headline (Limit-Text $url 60) 'indeterminate' '' 'Contacting the site...'
+
+# ---------- 4. download: best video + best audio OR 320kbps MP3 audio ----------
+if ($AudioOnly) {
+    $ytArgs = @(
+        '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
+        '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
+        '-f', 'ba/b',
+        '-x', '--audio-format', 'mp3', '--audio-quality', '320k',
+        '--embed-thumbnail', '--convert-thumbnails', 'jpg',
+        '--embed-metadata',
+        '--concurrent-fragments', '8',
+        '--windows-filenames',
+        '--ffmpeg-location', $Bin,
+        '-P', $Work,
+        '-o', '%(title).150B.%(ext)s',
+        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
+    )
+} else {
+    $h = ''
+    if ([int](ConvertTo-Num $cfg['MaxHeight']) -gt 0) { $h = '[height<=' + [int](ConvertTo-Num $cfg['MaxHeight']) + ']' }
+    # Prefer SDR (HDR -> SDR conversion looks washed out), then anything.
+    $fmt = "bv*${h}[dynamic_range=SDR]+ba/bv*${h}+ba/b${h}"
+    $ytArgs = @(
+        '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
+        '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
+        '-f', $fmt,
+        '-S', 'res,fps,vcodec:h264,abr',     # highest resolution, then fps, then prefer H.264 (no re-encode), then best audio
+        '--merge-output-format', 'mkv',
+        '--concurrent-fragments', '8',
+        '--windows-filenames',
+        '--ffmpeg-location', $Bin,
+        '-P', $Work,
+        '-o', '%(title).150B.%(ext)s',
+        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
+    )
+    if ($cfg['DownloadSubs'] -eq '1') {
+        $ytArgs += @('--write-subs', '--write-auto-subs', '--sub-langs', 'en.*,hi.*', '--convert-subs', 'srt')
+    }
+}
 if ($cfg['CookiesBrowser']) { $ytArgs += @('--cookies-from-browser', [string]$cfg['CookiesBrowser']) }
 
 $script:ytLines = New-Object System.Collections.Generic.List[string]
@@ -96,27 +139,57 @@ function Invoke-Yt {
                 $eta = ConvertTo-Num $p[5]
                 $st  = $p[6]
                 if ($p[7] -and $p[7] -ne 'NA') { $script:vTitle = Limit-Text $p[7] 70 }
-                if (($sw.ElapsedMilliseconds - $lastUi) -ge 700 -or $st -eq 'finished') {
+
+                if ($st -eq 'finished') {
+                    $lastUi = $sw.ElapsedMilliseconds
+                    $part++
+                    if ($AudioOnly) {
+                        Update-ProgressToast $tag 'Processing Audio' $script:vTitle 'indeterminate' 'Converting' 'Extracting high-quality 320kbps MP3...'
+                    } else {
+                        Update-ProgressToast $tag 'Processing' $script:vTitle 'indeterminate' 'Merging' 'Finalizing and merging media streams...'
+                    }
+                } elseif (($sw.ElapsedMilliseconds - $lastUi) -ge 700) {
                     $lastUi = $sw.ElapsedMilliseconds
                     if ($tot -gt 0) {
-                        $value = Format-Fraction ($dl / $tot)
-                        $vtext = '{0} / {1} ({2:N0}%)' -f (Format-Size $dl), (Format-Size $tot), (100 * [Math]::Min(1.0, $dl / $tot))
+                        $pct = [Math]::Min(1.0, $dl / $tot)
+                        if ($dl -ge $tot) {
+                            $value = 'indeterminate'
+                            $vtext = 'Finalizing'
+                            $head  = if ($AudioOnly) { 'Processing Audio' } else { 'Processing' }
+                            $stat  = if ($AudioOnly) { 'Download finished. Extracting audio...' } else { 'Download finished. Preparing streams...' }
+                        } else {
+                            $value = Format-Fraction $pct
+                            $vtext = '{0} / {1} ({2:N0}%)' -f (Format-Size $dl), (Format-Size $tot), (100 * $pct)
+                            $stat = ''
+                            if ($spd -gt 0) { $stat = (Format-Size $spd) + '/s' }
+                            if ($eta -gt 0) { if ($stat) { $stat += '  -  ' }; $stat += 'ETA ' + (Format-Eta $eta) }
+                            if (-not $stat) { $stat = 'Downloading...' }
+                            $head = if ($part -gt 1) { "Downloading (part $part)" } else { 'Downloading' }
+                        }
                     } else {
                         $value = 'indeterminate'
                         $vtext = (Format-Size $dl)
+                        $stat  = if ($spd -gt 0) { (Format-Size $spd) + '/s' } else { 'Downloading...' }
+                        $head  = if ($part -gt 1) { "Downloading (part $part)" } else { 'Downloading' }
                     }
-                    $stat = ''
-                    if ($spd -gt 0) { $stat = (Format-Size $spd) + '/s' }
-                    if ($eta -gt 0 -and $tot -gt 0) { if ($stat) { $stat += '  -  ' }; $stat += 'ETA ' + (Format-Eta $eta) }
-                    if (-not $stat) { $stat = 'Downloading...' }
-                    $head = 'Downloading'
-                    if ($part -gt 1) { $head = "Downloading (part $part)" }
                     Update-ProgressToast $tag $head $script:vTitle $value $vtext $stat
                 }
-                if ($st -eq 'finished') { $part++ }
             }
         } else {
             [void]$script:ytLines.Add($line)
+            if ($line -like '*[ExtractAudio]*') {
+                Update-ProgressToast $tag 'Converting Audio' $script:vTitle 'indeterminate' 'Converting' 'Encoding to high-quality 320kbps MP3...'
+            } elseif ($line -like '*[ThumbnailsConvertor]*' -or $line -like '*[EmbedThumbnail]*') {
+                Update-ProgressToast $tag 'Embedding Artwork' $script:vTitle 'indeterminate' 'Artwork' 'Adding album cover and song metadata...'
+            } elseif ($line -like '*[Metadata]*') {
+                Update-ProgressToast $tag 'Tagging Metadata' $script:vTitle 'indeterminate' 'Tagging' 'Writing track title and artist tags...'
+            } elseif ($line -like '*[Merger]*') {
+                Update-ProgressToast $tag 'Merging Streams' $script:vTitle 'indeterminate' 'Merging' 'Combining video and audio streams...'
+            } elseif ($line -like '*[Fixup*') {
+                Update-ProgressToast $tag 'Fixing Container' $script:vTitle 'indeterminate' 'Fixing' 'Optimizing media container...'
+            } elseif ($line -like '*Writing video subtitles*') {
+                Update-ProgressToast $tag 'Saving Subtitles' $script:vTitle 'indeterminate' 'Subtitles' 'Saving synchronized .srt captions...'
+            }
         }
     }
     $script:ytCode = $LASTEXITCODE
@@ -135,11 +208,12 @@ if ($script:ytCode -ne 0) {
     $err = ([string]$err) -replace '^ERROR:\s*', ''
     if (-not $err) { $err = 'Unknown error. See log.txt in %LOCALAPPDATA%\ClipToast' }
     Show-Toast 'Download failed' (Limit-Text $err 200) $tag
+    Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
 
-# ---------- 5. make every video WhatsApp-safe: MP4 + H.264 (yuv420p) + AAC + faststart ----------
+# ---------- 5. save audio / process video for WhatsApp compatibility ----------
 function Move-Unique([string]$src, [string]$name) {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     $base = [IO.Path]::GetFileNameWithoutExtension($name)
@@ -159,9 +233,34 @@ function Get-Probe([string]$file, [string]$stream, [string]$entry) {
 
 $saved = @()
 $n = 0
+
+if ($AudioOnly) {
+    Update-ProgressToast $tag 'Saving Audio' $script:vTitle 'indeterminate' 'Saving' 'Saving 320kbps MP3 to Downloads folder...'
+} else {
+    Update-ProgressToast $tag 'Processing Video' $script:vTitle 'indeterminate' 'Packaging' 'Checking WhatsApp and Windows compatibility...'
+}
+
 foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     $ext = $f.Extension.ToLower()
-    if ($ext -in '.jpg', '.jpeg', '.png', '.gif') { $saved += (Move-Unique $f.FullName $f.Name); continue }
+
+    # Subtitles and lyrics
+    if ($ext -in '.srt', '.vtt') {
+        $saved += (Move-Unique $f.FullName $f.Name)
+        continue
+    }
+
+    # Audio files (already converted to 320k MP3 with embedded cover art)
+    if ($ext -in '.mp3', '.m4a', '.aac', '.flac', '.opus', '.ogg', '.wav') {
+        $saved += (Move-Unique $f.FullName $f.Name)
+        continue
+    }
+
+    # Intermediate images or temp files: skip
+    if ($ext -in '.jpg', '.jpeg', '.png', '.gif', '.webp', '.part', '.temp', '.ytdl') {
+        continue
+    }
+
+    # Only process supported video formats through WhatsApp-safe pipeline
     if ($ext -notin '.mkv', '.mp4', '.webm', '.mov', '.m4v') { continue }
 
     $n++
@@ -189,9 +288,10 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     $dur = ConvertTo-Num ([string](& $ffprobe -v error -show_entries format=duration -of 'default=nw=1:nk=1' $inFile | Select-Object -First 1))
     $ff = @('-y', '-v', 'error', '-nostats', '-progress', 'pipe:1', '-i', $inFile, '-map', '0:v:0', '-map', '0:a:0?') + $vArgs + $aArgs + @('-movflags', '+faststart', $outFile)
 
-    $head = 'Finishing...'
-    if ($transcode) { $head = 'Converting to a WhatsApp-compatible MP4' }
-    Update-ProgressToast $tag $head $script:vTitle 'indeterminate' '' 'Preparing...'
+    $head = if ($transcode) { 'Converting Video' } else { 'Finalizing MP4' }
+    $subStatus = if ($transcode) { 'Re-encoding to WhatsApp-compatible H.264 + AAC...' } else { 'Optimizing MP4 for instant playback (faststart)...' }
+    $valText = if ($transcode) { 'Converting' } else { 'Finalizing' }
+    Update-ProgressToast $tag $head $script:vTitle 'indeterminate' $valText $subStatus
 
     $ffErr = New-Object System.Collections.Generic.List[string]
     $lastUi = -1000
@@ -201,7 +301,7 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
             if ($transcode -and $dur -gt 0 -and ($sw.ElapsedMilliseconds - $lastUi) -ge 700) {
                 $lastUi = $sw.ElapsedMilliseconds
                 $frac = ([double]$matches[2] / 1000000.0) / $dur
-                Update-ProgressToast $tag $head $script:vTitle (Format-Fraction $frac) ('{0:N0}%' -f (100 * [Math]::Min(1.0, $frac))) 'H.264 + AAC, highest quality'
+                Update-ProgressToast $tag $head $script:vTitle (Format-Fraction $frac) ('{0:N0}%' -f (100 * [Math]::Min(1.0, $frac))) 'Re-encoding for universal WhatsApp playback...'
             }
         } elseif ($l -notmatch '^(frame|fps|stream_|bitrate|total_size|out_time|dup_frames|drop_frames|speed|progress)') {
             [void]$ffErr.Add($l)
@@ -220,9 +320,15 @@ Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
 if ($saved.Count -eq 0) {
     Show-Toast 'ClipToast' 'Nothing was saved. Details are in log.txt in %LOCALAPPDATA%\ClipToast' $tag
 } elseif ($saved.Count -eq 1) {
-    $size = Format-Size ((Get-Item -LiteralPath $saved[0]).Length)
-    Show-Toast 'Download complete' ("{0}  ({1})" -f (Limit-Text ([IO.Path]::GetFileName($saved[0])) 90), $size) $tag $dest
+    $mainFile = $saved[0]
+    $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
+    $title = if ($AudioOnly -or $mainFile.EndsWith('.mp3')) { "$EmojiMusic Song downloaded" } else { 'Download complete' }
+    Show-Toast $title ("{0}  ({1})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 90), $size) $tag $dest $mainFile
 } else {
-    Show-Toast 'Download complete' ("{0} files saved to {1}" -f $saved.Count, $dest) $tag $dest
+    $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
+    if (-not $mainFile) { $mainFile = $saved[0] }
+    $title = if ($AudioOnly) { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
+    Show-Toast $title ("{0} files saved to {1}" -f $saved.Count, $dest) $tag $dest $mainFile
 }
+Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
 Write-Log ('DONE ' + ($saved -join ' | '))

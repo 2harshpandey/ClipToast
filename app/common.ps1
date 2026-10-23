@@ -1,14 +1,24 @@
-# common.ps1 - shared helpers, dot-sourced by the other scripts
+﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $Bin        = Join-Path $Root 'bin'
+if (-not (Test-Path -LiteralPath $Bin) -and (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'ClipToast\bin'))) {
+    $Bin    = Join-Path $env:LOCALAPPDATA 'ClipToast\bin'
+}
 $ConfigPath = Join-Path $Root 'config.txt'
 $LogPath    = Join-Path $Root 'log.txt'
 $ToastAppId = 'ClipToast'
-$AppVersion = '0.0.0'
+$AppVersion = '1.1.0'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'
+
+# Safe unicode characters constructed at runtime to guarantee zero ANSI/mojibake issues
+$EmojiMusic  = [char]::ConvertFromUtf32(0x1F3B5)               # 🎵
+$EmojiVideo  = [char]::ConvertFromUtf32(0x1F4E5)               # 📥
+$EmojiFolder = [char]::ConvertFromUtf32(0x1F4C1)               # 📁
+$EmojiGear   = [char]::ConvertFromUtf32(0x2699) + [char]0xFE0F # ⚙️
+$EmojiExit   = [char]::ConvertFromUtf32(0x274C)               # ❌
 
 try { if ((Test-Path -LiteralPath $LogPath) -and ((Get-Item -LiteralPath $LogPath).Length -gt 1MB)) { Remove-Item -LiteralPath $LogPath -Force } } catch {}
 
@@ -21,13 +31,15 @@ function Get-UnixNow { return [int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds(
 # ---------------- config (simple key=value file) ----------------
 function Read-Config {
     $cfg = @{
-        DownloadDir     = (Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast')
-        MaxHeight       = '0'
-        CookiesBrowser  = ''
-        AutoUpdate      = '1'
-        UpdateUrl       = 'https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json'
-        LastUpdateCheck = '0'
-        LastYtdlpUpdate = '0'
+        DownloadDir      = (Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast')
+        MaxHeight        = '0'
+        CookiesBrowser   = ''
+        AutoUpdate       = '1'
+        UpdateUrl        = 'https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json'
+        LastUpdateCheck  = '0'
+        LastYtdlpUpdate  = '0'
+        DownloadSubs     = '0'
+        StartWithWindows = '1'
     }
     if (Test-Path -LiteralPath $ConfigPath) {
         foreach ($line in (Get-Content -LiteralPath $ConfigPath -Encoding UTF8)) {
@@ -117,6 +129,19 @@ function Initialize-Toast {
             Set-ItemProperty -Path $regKey -Name 'ShowInSettings' -Value 1 -Type DWord -ErrorAction SilentlyContinue
         } catch { Write-Log "AppUserModelId registration notice: $_" }
 
+        # Register cliptoast:// protocol for toast actions (Cancel, Open, Play)
+        try {
+            $protoKey = 'HKCU:\Software\Classes\cliptoast'
+            if (-not (Test-Path -LiteralPath $protoKey)) { New-Item -Path $protoKey -Force | Out-Null }
+            Set-ItemProperty -Path $protoKey -Name '(Default)' -Value 'URL:ClipToast Protocol' -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $protoKey -Name 'URL Protocol' -Value '' -ErrorAction SilentlyContinue
+            $cmdKey = Join-Path $protoKey 'shell\open\command'
+            if (-not (Test-Path -LiteralPath $cmdKey)) { New-Item -Path $cmdKey -Force | Out-Null }
+            $vbs = Join-Path $AppDir 'run.vbs'
+            $cmdVal = '"{0}" "{1}" action.ps1 "%1"' -f (Join-Path $env:WINDIR 'System32\wscript.exe'), $vbs
+            Set-ItemProperty -Path $cmdKey -Name '(Default)' -Value $cmdVal -ErrorAction SilentlyContinue
+        } catch { Write-Log "Protocol registration notice: $_" }
+
         try {
             $script:Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($ToastAppId)
             $script:ToastOK = $true
@@ -128,15 +153,25 @@ function Initialize-Toast {
     } catch { $script:ToastOK = $false; Write-Log "Toast init failed: $_" }
 }
 
-function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '') {
+function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '', [string]$FilePath = '') {
     if (-not $script:ToastOK) { return }
     try {
         $t = [Security.SecurityElement]::Escape($Title)
         $b = [Security.SecurityElement]::Escape($Body)
+        $actionList = New-Object System.Collections.Generic.List[string]
+        if ($FilePath -and (Test-Path -LiteralPath $FilePath)) {
+            $fPath = (Get-Item -LiteralPath $FilePath).FullName
+            $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($fPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+            $actionList.Add("<action content='Play' arguments='cliptoast:play:$fB64' activationType='protocol'/>")
+            $actionList.Add("<action content='Open folder' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
+        } elseif ($FolderPath) {
+            $dPath = (Get-Item -LiteralPath $FolderPath).FullName
+            $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+            $actionList.Add("<action content='Open folder' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
+        }
         $actions = ''
-        if ($FolderPath) {
-            $uri = [Security.SecurityElement]::Escape(([Uri]$FolderPath).AbsoluteUri)
-            $actions = "<actions><action content='Open folder' arguments='$uri' activationType='protocol'/></actions>"
+        if ($actionList.Count -gt 0) {
+            $actions = '<actions>' + ($actionList -join '') + '</actions>'
         }
         $img = ''
         if ($script:LogoUri) {
@@ -162,7 +197,7 @@ function New-NotificationData([string]$Headline, [string]$Title, [string]$Value,
     return New-Object Windows.UI.Notifications.NotificationData ($dict, [uint32]$Seq)
 }
 
-# Progress toast: title line, progress bar, "42.1 MB / 118 MB (36%)" on the right, "5.2 MB/s - ETA 0:14" under the bar.
+# Progress toast: title line, progress bar, speed/ETA under the bar, with Cancel and Open folder buttons
 function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [string]$Value, [string]$ValueText, [string]$Status) {
     if (-not $script:ToastOK) { return }
     try {
@@ -170,6 +205,12 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
         if ($script:LogoUri) {
             $img = "<image placement='appLogoOverride' hint-crop='circle' src='$($script:LogoUri)' />"
         }
+        $cancelUri = "cliptoast:cancel:$Tag"
+        $c = Read-Config
+        $dPath = [string]$c['DownloadDir']
+        if (-not $dPath) { $dPath = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
+        if (-not (Test-Path -LiteralPath $dPath)) { try { New-Item -ItemType Directory -Force -Path $dPath | Out-Null } catch {} }
+        $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
         $xml = @"
 <toast scenario="reminder">
   <visual>
@@ -181,7 +222,8 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
     </binding>
   </visual>
   <actions>
-    <action content="Hide" arguments="dismiss" activationType="system" />
+    <action content="Cancel" arguments="$cancelUri" activationType="protocol" />
+    <action content="Open folder" arguments="cliptoast:open:$fB64" activationType="protocol" />
   </actions>
 </toast>
 "@
@@ -206,9 +248,7 @@ function Update-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [
 }
 
 # ---------------- signed self-update ----------------
-# Manifest (JSON at UpdateUrl): { "version": "1.0.1", "url": "https://.../ClipToast-app-1.0.1.zip", "signature": "<base64 RSA-SHA256 of the zip>", "notes": "..." }
-# The zip is only installed if its signature verifies against app\update-public-key.xml, so nobody
-# without your private key can push code to users - even if your hosting account is compromised.
+# Manifest (JSON at UpdateUrl): { "version": "1.1.0", "url": "https://.../ClipToast-app-1.1.0.zip", "signature": "<base64 RSA-SHA256 of the zip>", "notes": "..." }
 function Invoke-AppUpdate {
     param([switch]$Force)
     $cfg = Read-Config

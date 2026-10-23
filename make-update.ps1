@@ -1,7 +1,7 @@
 # make-update.ps1 - package a new version of ClipToast and sign it.
 #
 # Usage (from repository root):
-#   powershell -ExecutionPolicy Bypass -File .\make-update.ps1 -Version 1.0.0 -Notes "Initial release"
+#   powershell -ExecutionPolicy Bypass -File .\make-update.ps1 -Version 1.1.0 -Notes "Added MP3 audio, system tray, and subtitles"
 #
 # Output: ClipToast-app-<version>.zip and latest.json -> upload BOTH to the GitHub release.
 param(
