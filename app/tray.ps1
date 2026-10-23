@@ -220,7 +220,7 @@ $notifyIcon.ContextMenuStrip = $menu
 
 # Left-click immediately triggers download for clipboard link
 $notifyIcon.Add_MouseClick({
-    param($sender, $e)
+    param($s, $e)
     if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
             Start-ClipToastScript 'downloader.ps1'
