@@ -40,7 +40,7 @@ $notifyIcon.Visible = $true
 # Context Menu
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
-$itemVideo = $menu.Items.Add(("{0}  Download Video" -f $EmojiVideo))
+$itemVideo = $menu.Items.Add(("{0}  Download Video" -f (Get-EmojiVideo)))
 $itemVideo.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -48,7 +48,7 @@ $itemVideo.Add_Click({
     } catch { Write-Log "Tray Download Video failed: $_" }
 })
 
-$itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f $EmojiMusic))
+$itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f (Get-EmojiMusic)))
 $itemAudio.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -58,7 +58,7 @@ $itemAudio.Add_Click({
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
-$itemFolder = $menu.Items.Add(("{0}  Open Downloads Folder" -f $EmojiFolder))
+$itemFolder = $menu.Items.Add(("{0}  Open Downloads Folder" -f (Get-EmojiFolder)))
 $itemFolder.Add_Click({
     try {
         $cfg = Read-Config
@@ -71,7 +71,7 @@ $itemFolder.Add_Click({
     } catch { Write-Log "Tray Open Folder failed: $_" }
 })
 
-$itemSettings = $menu.Items.Add(("{0}  Settings" -f $EmojiGear))
+$itemSettings = $menu.Items.Add(("{0}  Settings" -f (Get-EmojiGear)))
 $itemSettings.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -81,7 +81,7 @@ $itemSettings.Add_Click({
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
-$itemExit = $menu.Items.Add(("{0}  Exit" -f $EmojiExit))
+$itemExit = $menu.Items.Add(("{0}  Exit" -f (Get-EmojiExit)))
 $itemExit.Add_Click({
     try {
         $notifyIcon.Visible = $false

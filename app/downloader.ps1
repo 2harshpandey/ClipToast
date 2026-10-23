@@ -322,12 +322,12 @@ if ($saved.Count -eq 0) {
 } elseif ($saved.Count -eq 1) {
     $mainFile = $saved[0]
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
-    $title = if ($AudioOnly -or $mainFile.EndsWith('.mp3')) { "$EmojiMusic Song downloaded" } else { 'Download complete' }
+    $title = if ($AudioOnly -or $mainFile.EndsWith('.mp3')) { "$([string](Get-EmojiMusic)) Song downloaded" } else { 'Download complete' }
     Show-Toast $title ("{0}  ({1})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 90), $size) $tag $dest $mainFile
 } else {
     $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
     if (-not $mainFile) { $mainFile = $saved[0] }
-    $title = if ($AudioOnly) { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
+    $title = if ($AudioOnly) { "$([string](Get-EmojiMusic)) Audio downloaded" } else { 'Download complete' }
     $hasSubs = ($saved | Where-Object { $_ -match '\.(srt|vtt)$' }).Count -gt 0
     $subLabel = if ($hasSubs) { ' (+ subtitles)' } else { '' }
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
