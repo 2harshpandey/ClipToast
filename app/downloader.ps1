@@ -9,7 +9,16 @@ $yt      = Join-Path $Bin 'yt-dlp.exe'
 $ffmpeg  = Join-Path $Bin 'ffmpeg.exe'
 $ffprobe = Join-Path $Bin 'ffprobe.exe'
 $env:Path = "$Bin;$env:Path"      # lets yt-dlp find deno
-$tag = 'dl' + [guid]::NewGuid().ToString('N').Substring(0, 10)
+# Restore tray icon if user exited it previously and has StartWithWindows enabled
+if ($cfg['StartWithWindows'] -ne '0') {
+    try {
+        $trayRunning = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' }
+        if (-not $trayRunning) {
+            $vbs = Join-Path $AppDir 'run.vbs'
+            Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f $vbs) -ErrorAction SilentlyContinue
+        }
+    } catch {}
+}
 
 # ---------- 0. tools present? (first run / repair) ----------
 if (-not (Test-Tools)) {
@@ -112,11 +121,12 @@ if ($AudioOnly) {
         '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
     )
     if ($cfg['DownloadSubs'] -eq '1') {
-        $ytArgs += @('--write-subs', '--write-auto-subs', '--sub-langs', 'en.*,hi.*', '--convert-subs', 'srt')
+        $ytArgs += @('--write-subs', '--write-auto-subs', '--sub-langs', 'en,en-orig,hi,hi-orig', '--convert-subs', 'srt')
     }
 }
 if ($cfg['CookiesBrowser']) { $ytArgs += @('--cookies-from-browser', [string]$cfg['CookiesBrowser']) }
 
+$script:srtNotAvailable = $false
 $script:ytLines = New-Object System.Collections.Generic.List[string]
 $script:ytCode  = 1
 $script:vTitle  = ''
@@ -196,6 +206,33 @@ function Invoke-Yt {
 }
 
 Invoke-Yt
+
+# Subtitle recovery: If subtitle rate limit (429) or failure occurred, don't kill the video download!
+if ($script:ytCode -ne 0) {
+    $isSubError = ($script:ytLines | Where-Object { $_ -match 'Unable to download video subtitles|subtitles.*HTTP Error 429|subtitles.*429|subtitles for' })
+    if ($isSubError -and ($ytArgs -contains '--write-subs')) {
+        Write-Log "Subtitle download encountered an issue ($isSubError). Checking media status..."
+        $script:srtNotAvailable = $true
+        $mediaInWork = (Get-ChildItem -LiteralPath $Work -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension.ToLower() -in '.mp4', '.mkv', '.webm', '.mov', '.mp3', '.m4a' })
+        if ($mediaInWork) {
+            Write-Log "Media was already downloaded; proceeding with packaging."
+            $script:ytCode = 0
+        } else {
+            Write-Log "Retrying video download without subtitles..."
+            Update-ProgressToast $tag 'Retrying...' $script:vTitle 'indeterminate' '' 'Subtitles not available. Downloading video...'
+            $newYtArgs = New-Object System.Collections.Generic.List[string]
+            for ($i = 0; $i -lt $ytArgs.Count; $i++) {
+                $arg = $ytArgs[$i]
+                if ($arg -in '--write-subs', '--write-auto-subs') { continue }
+                if ($arg -in '--sub-langs', '--convert-subs') { $i++; continue }
+                $newYtArgs.Add($arg)
+            }
+            $ytArgs = $newYtArgs.ToArray()
+            Invoke-Yt
+        }
+    }
+}
+
 if ($script:ytCode -ne 0) {
     Write-Log 'First attempt failed - updating yt-dlp and retrying'
     Update-ProgressToast $tag 'Retrying...' $script:vTitle 'indeterminate' '' 'Updating the downloader engine'
@@ -207,7 +244,29 @@ if ($script:ytCode -ne 0) {
     $err = ($script:ytLines | Where-Object { $_ -match 'ERROR' } | Select-Object -Last 1)
     $err = ([string]$err) -replace '^ERROR:\s*', ''
     if (-not $err) { $err = 'Unknown error. See log.txt in %LOCALAPPDATA%\ClipToast' }
-    Show-Toast 'Download failed' (Limit-Text $err 200) $tag
+
+    $platform = 'media link'
+    try { $platform = ([System.Uri]$url).Host } catch {}
+
+    $userPattern = [regex]::Escape($env:USERNAME)
+    $profilePattern = [regex]::Escape($env:USERPROFILE)
+    $rawLogs = ($script:ytLines | Select-Object -Last 25) -join "`n"
+    $cleanLogs = $rawLogs -replace $profilePattern, 'C:\Users\<user>' -replace $userPattern, '<user>'
+
+    $errFile = Join-Path $env:TEMP ("cliptoast_err_" + $tag + ".json")
+    try {
+        @{
+            tag      = $tag
+            url      = $url
+            platform = $platform
+            error    = $err
+            logs     = $cleanLogs
+            time     = (Get-Date -Format 's')
+        } | ConvertTo-Json | Set-Content -LiteralPath $errFile -Encoding UTF8
+    } catch {}
+
+    Write-Log "DOWNLOAD FAILED: $err"
+    Show-Toast 'Download failed' (Limit-Text $err 130) $tag '' '' $tag
     Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
@@ -323,15 +382,16 @@ if ($saved.Count -eq 0) {
     $mainFile = $saved[0]
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
     $title = if ($AudioOnly -or $mainFile.EndsWith('.mp3')) { "$EmojiMusic Song downloaded" } else { 'Download complete' }
-    Show-Toast $title ("{0}  ({1})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 90), $size) $tag $dest $mainFile
+    $subNote = if ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly -and -not $mainFile.EndsWith('.srt')) { " (Subtitles not available for this video)" } else { '' }
+    Show-Toast $title ("{0}  ({1}){2}" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $size, $subNote) $tag $dest $mainFile
 } else {
     $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
     if (-not $mainFile) { $mainFile = $saved[0] }
     $title = if ($AudioOnly) { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
     $hasSubs = ($saved | Where-Object { $_ -match '\.(srt|vtt)$' }).Count -gt 0
-    $subLabel = if ($hasSubs) { ' (+ subtitles)' } else { '' }
+    $subLabel = if ($hasSubs) { ' (+ subtitles)' } elseif ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly) { ' (Subtitles not available)' } else { '' }
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
-    Show-Toast $title ("{0}{1}  ({2})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 80), $subLabel, $size) $tag $dest $mainFile
+    Show-Toast $title ("{0}{1}  ({2})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $subLabel, $size) $tag $dest $mainFile
 }
 Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
 Write-Log ('DONE ' + ($saved -join ' | '))

@@ -153,13 +153,19 @@ function Initialize-Toast {
     } catch { $script:ToastOK = $false; Write-Log "Toast init failed: $_" }
 }
 
-function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '', [string]$FilePath = '') {
+function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '', [string]$FilePath = '', [string]$ReportTag = '') {
     if (-not $script:ToastOK) { return }
     try {
         $t = [Security.SecurityElement]::Escape($Title)
         $b = [Security.SecurityElement]::Escape($Body)
         $actionList = New-Object System.Collections.Generic.List[string]
-        if ($FilePath -and (Test-Path -LiteralPath $FilePath)) {
+        if ($ReportTag) {
+            $actionList.Add("<action content='Report issue' arguments='cliptoast:report:$ReportTag' activationType='protocol'/>")
+            if (Test-Path -LiteralPath $LogPath) {
+                $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Item -LiteralPath $LogPath).FullName)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+                $actionList.Add("<action content='View log' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
+            }
+        } elseif ($FilePath -and (Test-Path -LiteralPath $FilePath)) {
             $fPath = (Get-Item -LiteralPath $FilePath).FullName
             $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($fPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
             $actionList.Add("<action content='Play' arguments='cliptoast:play:$fB64' activationType='protocol'/>")

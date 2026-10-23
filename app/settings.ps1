@@ -97,10 +97,20 @@ $chkSubs.Checked = ([string]$cfg['DownloadSubs'] -eq '1')
 $form.Controls.Add($chkSubs)
 
 $chkTray = New-Object System.Windows.Forms.CheckBox
-$chkTray.Text = 'Run ClipToast in system tray near Windows clock (on Windows startup)'
-$chkTray.Location = New-Object System.Drawing.Point(20, 204); $chkTray.Size = New-Object System.Drawing.Size(460, 22)
+$chkTray.Text = 'Run ClipToast in system tray (on Windows startup)'
+$chkTray.Location = New-Object System.Drawing.Point(20, 204); $chkTray.Size = New-Object System.Drawing.Size(350, 22)
 $chkTray.Checked = ([string]$cfg['StartWithWindows'] -ne '0')
 $form.Controls.Add($chkTray)
+
+$btnStartTray = New-Object System.Windows.Forms.Button
+$btnStartTray.Text = 'Start Tray Now'
+$btnStartTray.Location = New-Object System.Drawing.Point(380, 201); $btnStartTray.Size = New-Object System.Drawing.Size(120, 26)
+$btnStartTray.Add_Click({
+    $vbs = Join-Path $AppDir 'run.vbs'
+    Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    [void][System.Windows.Forms.MessageBox]::Show("ClipToast tray icon is now running near your Windows clock.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+})
+$form.Controls.Add($btnStartTray)
 
 $chkU = New-Object System.Windows.Forms.CheckBox
 $chkU.Text = 'Install app updates automatically'

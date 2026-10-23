@@ -22,7 +22,9 @@
 - 🔔 **Interactive Toast Notifications**: Live progress bar, download speed, ETA, and media title.
   - **Cancel Ongoing Downloads**: Abort active downloads directly from the toast notification in 1 click.
   - **Instant Play & Open Folder**: Enjoy downloads immediately with dedicated "Play" and "Open folder" buttons.
-- 💬 **Instant Subtitles (.srt)**: Enable subtitles in Settings to download official or platform-synchronized captions in 0.1 seconds—zero heavy AI models needed.
+- 💬 **Smart Subtitles with Fallback**: Automatically grabs synchronized `.srt` captions when available. If captions are unavailable or rate-limited by the platform (such as YouTube HTTP 429), the video still downloads completely without interruption and clearly notes subtitle status.
+- 🛡️ **1-Click Anonymous Error Reporting**: If an unrecoverable failure occurs, the notification provides a **"Report issue"** button that pre-fills a GitHub issue with anonymous diagnostic info (OS version, yt-dlp version, sanitized error logs—strictly zero PII).
+- 🕒 **System Tray Icon with Auto-Recovery**: Sits quietly near your clock. If you ever exit the tray icon, restore it instantly via **Settings -> Start Tray Now**, the Start Menu, or automatically the next time you trigger any download.
 - 📱 **WhatsApp & Universal Playback Guarantee**: Automatically remuxes or converts videos to **MP4 (H.264 + AAC + yuv420p + faststart)** so they play natively on WhatsApp Web/Desktop, iPhone, Android, and Smart TVs without "unsupported format" errors.
 - 🎨 **SDR Color Preservation**: Avoids washed-out HDR-to-SDR conversions by preferring high-bitrate SDR streams.
 - 🔒 **Zero-Admin Installer**: Installs entirely in user space (`%LOCALAPPDATA%\ClipToast`) with no UAC prompts and registers standard Windows Add/Remove programs integration.
@@ -76,14 +78,19 @@ Because ClipToast is powered by `yt-dlp`, it supports virtually every media site
 ---
 
 ## ⚙️ Settings
-
+ 
 Access settings anytime via the system tray icon (**Right-click -> Settings**) or Start Menu (**ClipToast Settings**):
 - **Download folder**: Customize destination directory.
 - **Maximum video quality**: Cap resolutions at 1080p (recommended for speed) or leave unconstrained (up to 4K / 8K).
 - **Subtitles**: Toggle automatic subtitle (.srt) saving alongside video.
-- **System tray & Startup**: Run ClipToast near the Windows clock on startup.
+- **System tray & Startup**: Run ClipToast near the Windows clock on startup, or click **"Start Tray Now"** anytime to immediately launch the tray icon.
 - **Browser login cookies**: Select your browser to access account-locked or Instagram-walled videos.
 - **Update preferences**: Toggle auto-updates or click **Check for updates** anytime.
+
+> **💡 Exited the tray icon?** You can restore it anytime in 3 effortless ways:
+> 1. Open **ClipToast Settings** and click **Start Tray Now**.
+> 2. Search for **ClipToast Tray** in your Windows Start Menu.
+> 3. Press your normal hotkey (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd>) to download any link—ClipToast will automatically detect that the tray icon was closed and restore it quietly in the background!
 
 ---
 

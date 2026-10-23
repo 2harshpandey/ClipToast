@@ -95,3 +95,58 @@ if ($Uri -like 'cliptoast:play:*') {
     }
     exit 0
 }
+
+# 4. Action: Anonymous Error Report via GitHub Issues
+if ($Uri -like 'cliptoast:report:*') {
+    $rawTag = $Uri.Substring('cliptoast:report:'.Length).Trim()
+    $tag = [regex]::Replace($rawTag, '[^a-zA-Z0-9_-]', '')
+
+    $lastErr = $null
+    if ($tag) {
+        $errFile = Join-Path $env:TEMP ("cliptoast_err_" + $tag + ".json")
+        if (Test-Path -LiteralPath $errFile) {
+            try { $lastErr = Get-Content -LiteralPath $errFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch {}
+        }
+    }
+
+    $osInfo = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue)
+    $osName = if ($osInfo) { "$($osInfo.Caption) (Build $($osInfo.BuildNumber))" } else { [System.Environment]::OSVersion.VersionString }
+    $arch = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
+
+    $ytVer = 'unknown'
+    try {
+        $ytBin = Join-Path $Bin 'yt-dlp.exe'
+        if (Test-Path -LiteralPath $ytBin) { $ytVer = (& $ytBin --version).Trim() }
+    } catch {}
+
+    $errSummary = if ($lastErr -and $lastErr.error) { [string]$lastErr.error } else { 'Media download encountered an unrecoverable failure.' }
+    $platform = if ($lastErr -and $lastErr.platform) { [string]$lastErr.platform } else { 'Media platform' }
+    $sanitizedLogs = if ($lastErr -and $lastErr.logs) { [string]$lastErr.logs } else { 'No detailed logs available.' }
+
+    $title = "[Bug] Download failed on $platform"
+    $title = Limit-Text $title 70
+
+    $body = @"
+### Problem Description
+Download failed on **$platform** with error:
+````
+$errSummary
+````
+
+### Anonymous Environment Info
+- **ClipToast Version:** $AppVersion
+- **yt-dlp Version:** $ytVer
+- **Operating System:** $osName ($arch)
+
+### Diagnostics Log (Anonymous)
+````
+$sanitizedLogs
+````
+"@
+
+    $issueUrl = "https://github.com/2harshpandey/ClipToast/issues/new?title=" + [System.Uri]::EscapeDataString($title) + "&body=" + [System.Uri]::EscapeDataString($body)
+
+    Show-Toast 'ClipToast Error Reporting' 'Opening anonymous bug report form on GitHub in your browser...'
+    Start-Process $issueUrl
+    exit 0
+}
