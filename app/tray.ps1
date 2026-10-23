@@ -40,7 +40,7 @@ $notifyIcon.Visible = $true
 # Context Menu
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
-$itemVideo = $menu.Items.Add(("{0}  Download Video" -f (Get-EmojiVideo)))
+$itemVideo = $menu.Items.Add(("{0}  Download Video" -f $EmojiVideo))
 $itemVideo.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -48,7 +48,7 @@ $itemVideo.Add_Click({
     } catch { Write-Log "Tray Download Video failed: $_" }
 })
 
-$itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f (Get-EmojiMusic)))
+$itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f $EmojiMusic))
 $itemAudio.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -58,20 +58,20 @@ $itemAudio.Add_Click({
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
-$itemFolder = $menu.Items.Add(("{0}  Open Downloads Folder" -f (Get-EmojiFolder)))
+$itemFolder = $menu.Items.Add(("{0}  Open Downloads Folder" -f $EmojiFolder))
 $itemFolder.Add_Click({
     try {
         $cfg = Read-Config
         $dir = [string]$cfg['DownloadDir']
         if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
         if (-not (Test-Path -LiteralPath $dir)) {
-            try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch { $null = $_ }
+            try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
         }
         Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $dir) -ErrorAction SilentlyContinue
     } catch { Write-Log "Tray Open Folder failed: $_" }
 })
 
-$itemSettings = $menu.Items.Add(("{0}  Settings" -f (Get-EmojiGear)))
+$itemSettings = $menu.Items.Add(("{0}  Settings" -f $EmojiGear))
 $itemSettings.Add_Click({
     try {
         $vbs = Join-Path $AppDir 'run.vbs'
@@ -81,14 +81,14 @@ $itemSettings.Add_Click({
 
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
-$itemExit = $menu.Items.Add(("{0}  Exit" -f (Get-EmojiExit)))
+$itemExit = $menu.Items.Add(("{0}  Exit" -f $EmojiExit))
 $itemExit.Add_Click({
     try {
         $notifyIcon.Visible = $false
         $notifyIcon.Dispose()
-    } catch { $null = $_ }
+    } catch {}
     if ($mutex) {
-        try { $mutex.ReleaseMutex() } catch { $null = $_ }
+        try { $mutex.ReleaseMutex() } catch {}
         $mutex.Dispose()
     }
     [System.Windows.Forms.Application]::Exit()
@@ -98,7 +98,8 @@ $notifyIcon.ContextMenuStrip = $menu
 
 # Left-click immediately triggers download for clipboard link
 $notifyIcon.Add_MouseClick({
-    if ($args.Count -ge 2 -and $args[1].Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+    param($sender, $e)
+    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
             $vbs = Join-Path $AppDir 'run.vbs'
             Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
@@ -112,9 +113,9 @@ try {
     try {
         $notifyIcon.Visible = $false
         $notifyIcon.Dispose()
-    } catch { $null = $_ }
+    } catch {}
     if ($mutex) {
-        try { $mutex.ReleaseMutex() } catch { $null = $_ }
+        try { $mutex.ReleaseMutex() } catch {}
         $mutex.Dispose()
     }
 }

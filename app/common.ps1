@@ -14,11 +14,11 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $ProgressPreference = 'SilentlyContinue'
 
 # Safe unicode characters constructed at runtime to guarantee zero ANSI/mojibake issues
-function Get-EmojiMusic  { return [char]::ConvertFromUtf32(0x1F3B5) }               # 🎵
-function Get-EmojiVideo  { return [char]::ConvertFromUtf32(0x1F4E5) }               # 📥
-function Get-EmojiFolder { return [char]::ConvertFromUtf32(0x1F4C1) }               # 📁
-function Get-EmojiGear   { return ([char]::ConvertFromUtf32(0x2699) + [char]0xFE0F) } # ⚙️
-function Get-EmojiExit   { return [char]::ConvertFromUtf32(0x274C) }               # ❌
+$EmojiMusic  = [char]::ConvertFromUtf32(0x1F3B5)               # 🎵
+$EmojiVideo  = [char]::ConvertFromUtf32(0x1F4E5)               # 📥
+$EmojiFolder = [char]::ConvertFromUtf32(0x1F4C1)               # 📁
+$EmojiGear   = [char]::ConvertFromUtf32(0x2699) + [char]0xFE0F # ⚙️
+$EmojiExit   = [char]::ConvertFromUtf32(0x274C)               # ❌
 
 try { if ((Test-Path -LiteralPath $LogPath) -and ((Get-Item -LiteralPath $LogPath).Length -gt 1MB)) { Remove-Item -LiteralPath $LogPath -Force } } catch {}
 
