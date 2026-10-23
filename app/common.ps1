@@ -1,12 +1,29 @@
-﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
+# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
+$InstallDir = $Root
 $Bin        = Join-Path $Root 'bin'
 if (-not (Test-Path -LiteralPath $Bin) -and (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'ClipToast\bin'))) {
     $Bin    = Join-Path $env:LOCALAPPDATA 'ClipToast\bin'
 }
 $ConfigPath = Join-Path $Root 'config.txt'
 $LogPath    = Join-Path $Root 'log.txt'
+
+function Get-ClipToastLauncher {
+    $candidates = @(
+        (Join-Path $InstallDir 'ClipToast.exe'),
+        (Join-Path $Root 'ClipToast.exe'),
+        (Join-Path $Root 'src\launcher\ClipToast.exe'),
+        (Join-Path $AppDir 'ClipToast.exe'),
+        (Join-Path $env:LOCALAPPDATA 'ClipToast\ClipToast.exe')
+    )
+    foreach ($c in $candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($c) -and (Test-Path -LiteralPath $c)) {
+            return $c
+        }
+    }
+    return $null
+}
 $ToastAppId = 'ClipToast'
 $AppVersion = '1.1.0'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
@@ -137,8 +154,13 @@ function Initialize-Toast {
             Set-ItemProperty -Path $protoKey -Name 'URL Protocol' -Value '' -ErrorAction SilentlyContinue
             $cmdKey = Join-Path $protoKey 'shell\open\command'
             if (-not (Test-Path -LiteralPath $cmdKey)) { New-Item -Path $cmdKey -Force | Out-Null }
-            $vbs = Join-Path $AppDir 'run.vbs'
-            $cmdVal = '"{0}" "{1}" action.ps1 "%1"' -f (Join-Path $env:WINDIR 'System32\wscript.exe'), $vbs
+            $launcher = Get-ClipToastLauncher
+            if ($launcher) {
+                $cmdVal = '"{0}" --action "%1"' -f $launcher
+            } else {
+                $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                $cmdVal = '"{0}" -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" "%1"' -f $ps, (Join-Path $AppDir 'action.ps1')
+            }
             Set-ItemProperty -Path $cmdKey -Name '(Default)' -Value $cmdVal -ErrorAction SilentlyContinue
         } catch { Write-Log "Protocol registration notice: $_" }
 
@@ -326,3 +348,29 @@ function Invoke-AppUpdate {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+function Start-ClipToastScript([string]$Script, [string[]]$ScriptArgs = @()) {
+    $launcher = Get-ClipToastLauncher
+    if ($launcher) {
+        $a = @()
+        if ($Script -eq 'tray.ps1') { $a += '--tray' }
+        elseif ($Script -eq 'settings.ps1') { $a += '--settings' }
+        elseif ($Script -eq 'action.ps1') { $a += '--action' }
+        elseif ($Script -eq 'downloader.ps1') {
+            if ($ScriptArgs -contains '-AudioOnly') { $a += '--audio' }
+            else { $a += '--video' }
+            foreach ($arg in $ScriptArgs) { if ($arg -ne '-AudioOnly') { $a += $arg } }
+        }
+        else {
+            $a += $Script
+            if ($ScriptArgs) { $a += $ScriptArgs }
+        }
+        Start-Process -FilePath $launcher -ArgumentList $a -ErrorAction SilentlyContinue
+        return
+    }
+    $psArgs = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+        '-File', ('"{0}"' -f (Join-Path $AppDir $Script)))
+    if ($ScriptArgs) { $psArgs += $ScriptArgs }
+    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $psArgs -ErrorAction SilentlyContinue
+}
+

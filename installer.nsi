@@ -12,16 +12,19 @@ Unicode true
 !include "LogicLib.nsh"
 
 Name "${APP_NAME}"
-OutFile "ClipToastSetup-v1.1.exe"
+OutFile "release\ClipToastSetup-v1.1.exe"
 InstallDir "$LOCALAPPDATA\ClipToast"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+SetCompressor zlib
 BrandingText "${APP_NAME} ${APP_VERSION}"
 VIProductVersion "1.1.0.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} - Seamless Windows Clipboard Media Downloader"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
-VIAddVersionKey "LegalCopyright" "ClipToast. Uses yt-dlp, FFmpeg, and Deno (downloaded separately from official releases)"
+VIAddVersionKey "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ClipToast"
+VIAddVersionKey "CompanyName" "ClipToast"
+VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.exe"
 
 Var DownloadDir
 
@@ -30,7 +33,7 @@ Var DownloadDir
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "Copy any video or audio link from YouTube, Instagram, TikTok, Reddit, Twitter/X, or 1,000+ supported sites:$\r$\n$\r$\n  * Ctrl+Alt+G               -  Download WhatsApp-ready MP4 Video$\r$\n  * Ctrl+Alt+A / Ctrl+Alt+M  -  Download 320kbps MP3 Audio with cover art$\r$\n  * System Tray              -  Click the ClipToast icon near your clock$\r$\n$\r$\nSetup takes a moment to configure the media engine. No administrator rights needed."
+!define MUI_WELCOMEPAGE_TEXT "Copy any video or audio link from YouTube, Instagram, TikTok, Reddit, Twitter/X, or 1,000+ supported sites:$\r$\n$\r$\n  * Ctrl+Alt+G               -  Download WhatsApp-ready MP4 Video$\r$\n  * Ctrl+Alt+A / Ctrl+Alt+M  -  Download 320kbps MP3 Audio with cover art$\r$\n  * System Tray              -  Click the ClipToast icon near your clock$\r$\n$\r$\nFast, lightweight, open-source. No administrator rights needed."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirPre
@@ -67,6 +70,7 @@ Section "Install"
   SetOutPath "$INSTDIR"
   File "cliptoast.ico"
   File "cliptoast.png"
+  File "/oname=ClipToast.exe" "src\launcher\ClipToast.exe"
   SetOutPath "$INSTDIR\app"
   File /r "app\*.*"
 
@@ -77,24 +81,28 @@ Section "Install"
     CopyFiles /SILENT "$LOCALAPPDATA\LinkGrab\bin\*.*" "$INSTDIR\bin"
   ${EndIf}
 
-  ; Pass initial configuration via environment variables
-  System::Call 'Kernel32::SetEnvironmentVariable(t "LG_DLDIR", t "$DownloadDir")i'
-  System::Call 'Kernel32::SetEnvironmentVariable(t "LG_UPDATEURL", t "${UPDATE_URL}")i'
-
-  DetailPrint "Setting up ClipToast and media tools..."
-  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\app\install.ps1"'
-  Pop $0
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONINFORMATION "Setup finished, but some tools could not be downloaded (offline?).$\r$\n$\r$\nDon't worry: ClipToast will retry automatically the first time you use it."
+  ; Create default config if not existing (native NSIS, no PowerShell execution)
+  ${IfNot} ${FileExists} "$INSTDIR\config.txt"
+    FileOpen $0 "$INSTDIR\config.txt" w
+    FileWrite $0 "DownloadDir=$DownloadDir$\r$\n"
+    FileWrite $0 "UpdateUrl=${UPDATE_URL}$\r$\n"
+    FileWrite $0 "AudioOnly=0$\r$\n"
+    FileWrite $0 "DownloadSubs=0$\r$\n"
+    FileWrite $0 "StartWithWindows=1$\r$\n"
+    FileWrite $0 "AutoUpdate=1$\r$\n"
+    FileWrite $0 "LastYtdlpUpdate=0$\r$\n"
+    FileClose $0
   ${EndIf}
 
+  CreateDirectory "$DownloadDir"
+
   SetOutPath "$INSTDIR"
-  ; Create Start menu shortcuts (with global hotkeys)
-  CreateShortCut "$SMPROGRAMS\ClipToast.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|G "ClipToast - Download video from clipboard (MP4)"
-  CreateShortCut "$SMPROGRAMS\ClipToast Audio.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1 -AudioOnly' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|A "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+A)"
-  CreateShortCut "$SMPROGRAMS\ClipToast Audio (M).lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" downloader.ps1 -AudioOnly' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|M "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+M)"
-  CreateShortCut "$SMPROGRAMS\ClipToast Tray.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" tray.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "ClipToast System Tray Icon"
-  CreateShortCut "$SMPROGRAMS\ClipToast Settings.lnk" "$WINDIR\System32\wscript.exe" '"$INSTDIR\app\run.vbs" settings.ps1' "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "Settings and updates for ClipToast"
+  ; Create Start menu shortcuts (pointing directly to ClipToast.exe launcher)
+  CreateShortCut "$SMPROGRAMS\ClipToast.lnk" "$INSTDIR\ClipToast.exe" "" "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|G "ClipToast - Download video from clipboard (MP4)"
+  CreateShortCut "$SMPROGRAMS\ClipToast Audio.lnk" "$INSTDIR\ClipToast.exe" "--audio" "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|A "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+A)"
+  CreateShortCut "$SMPROGRAMS\ClipToast Audio (M).lnk" "$INSTDIR\ClipToast.exe" "--audio" "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL CONTROL|ALT|M "ClipToast - Download audio only as 320kbps MP3 (Ctrl+Alt+M)"
+  CreateShortCut "$SMPROGRAMS\ClipToast Tray.lnk" "$INSTDIR\ClipToast.exe" "--tray" "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "ClipToast System Tray Icon"
+  CreateShortCut "$SMPROGRAMS\ClipToast Settings.lnk" "$INSTDIR\ClipToast.exe" "--settings" "$INSTDIR\cliptoast.ico" 0 SW_SHOWNORMAL "" "Settings and updates for ClipToast"
 
   ; Clean up legacy shortcuts if upgrading
   Delete "$SMPROGRAMS\Link Downloader.lnk"
@@ -118,19 +126,21 @@ Section "Install"
   ; Register cliptoast:// protocol for toast actions (Cancel, Open, Play)
   WriteRegStr HKCU "Software\Classes\cliptoast" "" "URL:ClipToast Protocol"
   WriteRegStr HKCU "Software\Classes\cliptoast" "URL Protocol" ""
-  WriteRegStr HKCU "Software\Classes\cliptoast\shell\open\command" "" '"$WINDIR\System32\wscript.exe" "$INSTDIR\app\run.vbs" action.ps1 "%1"'
+  WriteRegStr HKCU "Software\Classes\cliptoast\shell\open\command" "" '"$INSTDIR\ClipToast.exe" --action "%1"'
 
   ; Register Startup Run key for System Tray
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ClipToastTray" '"$WINDIR\System32\wscript.exe" "$INSTDIR\app\run.vbs" tray.ps1'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ClipToastTray" '"$INSTDIR\ClipToast.exe" --tray'
 
   ; Launch System Tray immediately
-  Exec '"$WINDIR\System32\wscript.exe" "$INSTDIR\app\run.vbs" tray.ps1'
+  Exec '"$INSTDIR\ClipToast.exe" --tray'
 SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
-  ; Stop running system tray instance before removing files
-  nsExec::Exec 'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.CommandLine -like ''*tray.ps1*'' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
+  ; Stop running tray instances cleanly via exit event
+  ExecWait '"$INSTDIR\ClipToast.exe" --stop'
+  Sleep 600
+
   Delete "$SMPROGRAMS\ClipToast.lnk"
   Delete "$SMPROGRAMS\ClipToast Audio.lnk"
   Delete "$SMPROGRAMS\ClipToast Audio (M).lnk"

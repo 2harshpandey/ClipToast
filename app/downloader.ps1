@@ -1,6 +1,9 @@
-﻿# downloader.ps1 - takes the link from the clipboard and downloads it in the background
+# downloader.ps1 - takes the link from the clipboard and downloads it in the background
 param([switch]$NoUpdateCheck, [switch]$AudioOnly, [string]$InputUrl)
 $ErrorActionPreference = 'Continue'
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+try { $OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+$env:PYTHONIOENCODING = 'utf-8'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Initialize-Toast
 
@@ -16,8 +19,7 @@ if ($cfg['StartWithWindows'] -ne '0') {
     try {
         $trayRunning = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' }
         if (-not $trayRunning) {
-            $vbs = Join-Path $AppDir 'run.vbs'
-            Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f $vbs) -ErrorAction SilentlyContinue
+            Start-ClipToastScript 'tray.ps1'
         }
     } catch {}
 }
@@ -127,7 +129,7 @@ if ($AudioOnly) {
         '--ffmpeg-location', $Bin,
         '-P', $Work,
         '-o', '%(title).150B.%(ext)s',
-        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
+        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)j'
     )
 } else {
     $h = ''
@@ -145,7 +147,7 @@ if ($AudioOnly) {
         '--ffmpeg-location', $Bin,
         '-P', $Work,
         '-o', '%(title).150B.%(ext)s',
-        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)s'
+        '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)j'
     )
     if ($cfg['DownloadSubs'] -eq '1') {
         $ytArgs += @('--write-subs', '--write-auto-subs', '--sub-langs', 'en,en-orig,hi,hi-orig', '--convert-subs', 'srt')
@@ -175,7 +177,17 @@ function Invoke-Yt {
                 $spd = ConvertTo-Num $p[4]
                 $eta = ConvertTo-Num $p[5]
                 $st  = $p[6]
-                if ($p[7] -and $p[7] -ne 'NA') { $script:vTitle = Limit-Text $p[7] 70 }
+                if ($p[7] -and $p[7] -ne 'NA') {
+                    try {
+                        $rawT = $p[7]
+                        if ($rawT.StartsWith('"') -and $rawT.EndsWith('"')) {
+                            $rawT = $rawT | ConvertFrom-Json
+                        }
+                        $script:vTitle = Limit-Text ($rawT.Normalize([System.Text.NormalizationForm]::FormKD).Trim()) 70
+                    } catch {
+                        $script:vTitle = Limit-Text $p[7].Trim() 70
+                    }
+                }
 
                 if ($st -eq 'finished') {
                     $lastUi = $sw.ElapsedMilliseconds
@@ -329,15 +341,21 @@ if ($AudioOnly) {
 foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     $ext = $f.Extension.ToLower()
 
+    # Determine safe base name (normalize if styled unicode font was stripped to punctuation)
+    $cleanBase = $f.BaseName
+    if (($cleanBase -replace '[^a-zA-Z0-9\p{L}]', '' -eq '') -and $script:vTitle) {
+        $cleanBase = ($script:vTitle -replace '[\\/:*?"<>|]', '_').Trim()
+    }
+
     # Subtitles and lyrics
     if ($ext -in '.srt', '.vtt') {
-        $saved += (Move-Unique $f.FullName $f.Name)
+        $saved += (Move-Unique $f.FullName ($cleanBase + $ext))
         continue
     }
 
     # Audio files (already converted to 320k MP3 with embedded cover art)
     if ($ext -in '.mp3', '.m4a', '.aac', '.flac', '.opus', '.ogg', '.wav') {
-        $saved += (Move-Unique $f.FullName $f.Name)
+        $saved += (Move-Unique $f.FullName ($cleanBase + $ext))
         continue
     }
 
@@ -350,7 +368,7 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     if ($ext -notin '.mkv', '.mp4', '.webm', '.mov', '.m4v') { continue }
 
     $n++
-    $display = $f.BaseName + '.mp4'
+    $display = $cleanBase + '.mp4'
     $inFile  = Join-Path $Work ("in$n$ext")            # plain ASCII names so ffmpeg never trips on Hindi/emoji titles
     $outFile = Join-Path $Out  ("out$n.mp4")
     Move-Item -LiteralPath $f.FullName -Destination $inFile

@@ -1,4 +1,4 @@
-﻿# tray.ps1 - Windows system tray icon for ClipToast
+# tray.ps1 - Windows system tray icon for ClipToast
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
@@ -131,11 +131,10 @@ try {
     [ClipToastHotkeys]::add_OnHotkeyAction({
         param($action)
         try {
-            $vbs = Join-Path $AppDir 'run.vbs'
             if ($action -eq 'audio') {
-                Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1 -AudioOnly' -f $vbs) -ErrorAction SilentlyContinue
+                Start-ClipToastScript 'downloader.ps1' @('-AudioOnly')
             } else {
-                Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+                Start-ClipToastScript 'downloader.ps1'
             }
         } catch { Write-Log "Tray hotkey dispatch failed: $_" }
     })
@@ -168,16 +167,14 @@ $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $itemVideo = $menu.Items.Add(("{0}  Download Video" -f $EmojiVideo))
 $itemVideo.Add_Click({
     try {
-        $vbs = Join-Path $AppDir 'run.vbs'
-        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+        Start-ClipToastScript 'downloader.ps1'
     } catch { Write-Log "Tray Download Video failed: $_" }
 })
 
 $itemAudio = $menu.Items.Add(("{0}  Download MP3 Audio Only" -f $EmojiMusic))
 $itemAudio.Add_Click({
     try {
-        $vbs = Join-Path $AppDir 'run.vbs'
-        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1 -AudioOnly' -f $vbs) -ErrorAction SilentlyContinue
+        Start-ClipToastScript 'downloader.ps1' @('-AudioOnly')
     } catch { Write-Log "Tray Download MP3 failed: $_" }
 })
 
@@ -199,8 +196,7 @@ $itemFolder.Add_Click({
 $itemSettings = $menu.Items.Add(("{0}  Settings" -f $EmojiGear))
 $itemSettings.Add_Click({
     try {
-        $vbs = Join-Path $AppDir 'run.vbs'
-        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" settings.ps1' -f $vbs) -ErrorAction SilentlyContinue
+        Start-ClipToastScript 'settings.ps1'
     } catch { Write-Log "Tray Settings failed: $_" }
 })
 
@@ -227,11 +223,33 @@ $notifyIcon.Add_MouseClick({
     param($sender, $e)
     if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
-            $vbs = Join-Path $AppDir 'run.vbs'
-            Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" downloader.ps1' -f $vbs) -ErrorAction SilentlyContinue
+            Start-ClipToastScript 'downloader.ps1'
         } catch { Write-Log "Tray Click failed: $_" }
     }
 })
+
+$script:exitEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\ClipToast_Tray_Exit')
+$pollTimer = New-Object System.Windows.Forms.Timer
+$pollTimer.Interval = 500
+$pollTimer.Add_Tick({
+    try {
+        if ($script:exitEvent.WaitOne(0)) {
+            $pollTimer.Stop()
+            $pollTimer.Dispose()
+            try { [ClipToastHotkeys]::Stop() } catch {}
+            try {
+                $notifyIcon.Visible = $false
+                $notifyIcon.Dispose()
+            } catch {}
+            if ($mutex) {
+                try { $mutex.ReleaseMutex() } catch {}
+                $mutex.Dispose()
+            }
+            [System.Windows.Forms.Application]::Exit()
+        }
+    } catch {}
+})
+$pollTimer.Start()
 
 try {
     [System.Windows.Forms.Application]::Run()

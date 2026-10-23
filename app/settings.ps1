@@ -1,4 +1,4 @@
-﻿# settings.ps1 - settings and configuration window for ClipToast
+# settings.ps1 - settings and configuration window for ClipToast
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Add-Type -AssemblyName System.Windows.Forms
@@ -106,8 +106,7 @@ $btnStartTray = New-Object System.Windows.Forms.Button
 $btnStartTray.Text = 'Start Tray Now'
 $btnStartTray.Location = New-Object System.Drawing.Point(380, 201); $btnStartTray.Size = New-Object System.Drawing.Size(120, 26)
 $btnStartTray.Add_Click({
-    $vbs = Join-Path $AppDir 'run.vbs'
-    Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f $vbs) -ErrorAction SilentlyContinue
+    Start-ClipToastScript 'tray.ps1'
     [void][System.Windows.Forms.MessageBox]::Show("ClipToast tray icon is now running near your Windows clock.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
 })
 $form.Controls.Add($btnStartTray)
@@ -163,14 +162,24 @@ function Save-Fields {
     # Windows Startup integration for System Tray
     $regRun = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     if ($chkTray.Checked) {
-        $trayTarget = '"{0}" "{1}" tray.ps1' -f (Join-Path $env:WINDIR 'System32\wscript.exe'), (Join-Path $AppDir 'run.vbs')
+        $launcher = Get-ClipToastLauncher
+        if ($launcher) {
+            $trayTarget = '"{0}" --tray' -f $launcher
+        } else {
+            $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            $trayTarget = '"{0}" -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}"' -f $ps, (Join-Path $AppDir 'tray.ps1')
+        }
         try { Set-ItemProperty -Path $regRun -Name 'ClipToastTray' -Value $trayTarget -ErrorAction SilentlyContinue } catch {}
-        # Launch tray icon immediately
-        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"{0}" tray.ps1' -f (Join-Path $AppDir 'run.vbs')) -ErrorAction SilentlyContinue
+        Start-ClipToastScript 'tray.ps1'
     } else {
         try { Remove-ItemProperty -Path $regRun -Name 'ClipToastTray' -ErrorAction SilentlyContinue } catch {}
         try {
-            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            $launcher = Get-ClipToastLauncher
+            if ($launcher) {
+                Start-Process -FilePath $launcher -ArgumentList '--stop' -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+            } else {
+                Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            }
         } catch {}
     }
 }
