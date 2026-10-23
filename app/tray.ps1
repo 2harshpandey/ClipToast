@@ -98,7 +98,7 @@ $notifyIcon.ContextMenuStrip = $menu
 
 # Left-click immediately triggers download for clipboard link
 $notifyIcon.Add_MouseClick({
-    param($sender, $e)
+    param($src, $e)
     if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         try {
             $vbs = Join-Path $AppDir 'run.vbs'
