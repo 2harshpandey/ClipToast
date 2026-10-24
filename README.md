@@ -12,7 +12,7 @@
 <br/>
 
 <div align="center">
-  <img src="assets/demo.gif" alt="ClipToast Live Download Progress in Windows Toast" width="680" />
+  <img src=".github/assets/demo.gif" alt="ClipToast Live Download Progress in Windows Toast" width="680" />
   <p><em>Real-time download progress bar, speed, ETA, and 1-click controls right inside Windows toast notifications.</em></p>
 </div>
 
@@ -100,7 +100,7 @@ If you prefer not to run an installer:
 ## ⚙️ Settings & System Tray Menu
 
 <div align="center">
-  <img src="assets/tray-menu.png" alt="ClipToast System Tray Menu" width="300" />
+  <img src=".github/assets/tray-menu.png" alt="ClipToast System Tray Menu" width="300" />
 </div>
 
 <br/>
@@ -129,7 +129,10 @@ Access quick media actions and settings anytime via the system tray icon near yo
 
 ```
 ClipToast/
-├── .github/                  # GitHub Community Standards & Issue Templates
+├── .github/                  # GitHub Community Standards, Issue Templates & Assets
+│   ├── assets/               # Visual documentation & preview media
+│   │   ├── demo.gif          # Live toast download progress animation
+│   │   └── tray-menu.png     # System tray context menu preview
 │   ├── ISSUE_TEMPLATE/       # Bug report & feature request templates
 │   └── pull_request_template.md
 ├── app/                      # Application runtime scripts and assets
@@ -143,9 +146,6 @@ ClipToast/
 │   ├── cliptoast.ico         # Notification & tray icon
 │   ├── cliptoast.png         # Modern toast logo
 │   └── version.txt           # App version manifest (1.1.0)
-├── assets/                   # Visual documentation & preview media
-│   ├── demo.gif              # Live toast download progress animation
-│   └── tray-menu.png         # System tray context menu preview
 ├── release/                  # GitHub Release assets (built artifacts)
 │   ├── ClipToastSetup-v1.1.exe       # Standalone installer wizard
 │   ├── ClipToast-v1.1.0-portable.zip # Zero-install portable edition
