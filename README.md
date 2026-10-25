@@ -158,6 +158,7 @@ ClipToast/
 │       └── ClipToast.exe     # Compiled native GUI launcher (subsystem:windows)
 ├── cliptoast.ico             # High-resolution application icon
 ├── cliptoast.png             # Modern notification logo
+├── installer-sidebar.bmp     # Modern installer wizard sidebar branding
 ├── installer.nsi             # NSIS installer definition (outputs to release\)
 ├── make-update.ps1           # Release packaging and RSA signing tool
 ├── CODE_OF_CONDUCT.md        # Contributor Covenant Code of Conduct

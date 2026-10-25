@@ -60,6 +60,7 @@ ClipToast/
 │       └── ClipToast.exe     # Compiled native GUI launcher
 ├── cliptoast.ico             # High-resolution application icon
 ├── cliptoast.png             # Modern notification logo
+├── installer-sidebar.bmp     # Modern installer wizard sidebar branding
 ├── installer.nsi             # NSIS installer definition
 ├── make-update.ps1           # Packaging and RSA signing tool
 ├── LICENSE                   # MIT License

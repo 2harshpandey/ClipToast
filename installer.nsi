@@ -11,8 +11,10 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 
-Name "${APP_NAME}"
-OutFile "release\ClipToastSetup-v1.1.exe"
+!ifndef OUT_FILE
+  !define OUT_FILE "release\ClipToastSetup-v1.1.exe"
+!endif
+OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\ClipToast"
 RequestExecutionLevel user
 SetCompressor zlib
@@ -31,9 +33,11 @@ Var DownloadDir
 !define MUI_ICON "cliptoast.ico"
 !define MUI_UNICON "cliptoast.ico"
 !define MUI_ABORTWARNING
+!define MUI_WELCOMEFINISHPAGE_BITMAP "installer-sidebar.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "installer-sidebar.bmp"
 
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "Copy any video or audio link from YouTube, Instagram, TikTok, Reddit, Twitter/X, or 1,000+ supported sites:$\r$\n$\r$\n  * Ctrl+Alt+G               -  Download WhatsApp-ready MP4 Video$\r$\n  * Ctrl+Alt+A / Ctrl+Alt+M  -  Download 320kbps MP3 Audio with cover art$\r$\n  * System Tray              -  Click the ClipToast icon near your clock$\r$\n$\r$\nFast, lightweight, open-source. No administrator rights needed."
+!define MUI_WELCOMEPAGE_TEXT "A modern, zero-friction clipboard media downloader for Windows 11 and 10.$\r$\n$\r$\nSimply copy any media link and trigger your download:$\r$\n$\r$\n  • Ctrl + Alt + G$\r$\n    Download highest quality WhatsApp-ready MP4$\r$\n$\r$\n  • Ctrl + Alt + A  (or Ctrl + Alt + M)$\r$\n    Extract clean 320kbps MP3 audio with cover art$\r$\n$\r$\n  • System Tray Icon$\r$\n    1-click downloads & settings near your taskbar clock$\r$\n$\r$\nFast, lightweight, and installs without administrator privileges."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirPre
@@ -46,8 +50,8 @@ Var DownloadDir
 
 !insertmacro MUI_PAGE_INSTFILES
 
-!define MUI_FINISHPAGE_TITLE "You're all set"
-!define MUI_FINISHPAGE_TEXT "To download: copy any media link, then:$\r$\n$\r$\n  * Press Ctrl+Alt+G for Video (MP4)$\r$\n  * Press Ctrl+Alt+A (or Ctrl+Alt+M) for Audio (320k MP3)$\r$\n  * Or click the ClipToast tray icon near your clock!$\r$\n$\r$\nClipToast runs quietly in the background with live toast notifications."
+!define MUI_FINISHPAGE_TITLE "Installation Complete"
+!define MUI_FINISHPAGE_TEXT "${APP_NAME} is installed and ready to download in the background.$\r$\n$\r$\nHow to download anytime:$\r$\n$\r$\n  1. Copy any video or music link to your clipboard.$\r$\n  2. Press Ctrl+Alt+G (Video) or Ctrl+Alt+A (MP3 Audio).$\r$\n  3. Live progress appears in Windows toast notifications.$\r$\n$\r$\nYou can also click the ClipToast tray icon near your clock anytime."
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
