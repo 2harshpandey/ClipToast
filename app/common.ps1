@@ -297,8 +297,18 @@ function Invoke-AppUpdate {
     $tmp = Join-Path $env:TEMP ('cliptoast_upd_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     try {
         if ($url -notlike 'https://*') { throw 'The update URL must start with https://' }
-        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 8 -Headers @{ 'Cache-Control' = 'no-cache' }
-        $txt = if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content }
+        $txt = $null
+        $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if ($curl) {
+            $raw = & $curl.Source -s -L --max-time 15 -H "Cache-Control: no-cache" $url
+            if ($LASTEXITCODE -eq 0 -and $raw) {
+                $txt = ($raw -join "`n")
+            }
+        }
+        if (-not $txt) {
+            $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30 -Headers @{ 'Cache-Control' = 'no-cache' }
+            $txt = if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content }
+        }
         $m = $txt.TrimStart([char]0xFEFF) | ConvertFrom-Json
         $cfg = Read-Config
         $cfg['LastUpdateCheck'] = [string](Get-UnixNow)
@@ -310,7 +320,16 @@ function Invoke-AppUpdate {
 
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
         $zip = Join-Path $tmp 'update.zip'
-        Invoke-WebRequest -Uri ([string]$m.url) -OutFile $zip -UseBasicParsing -TimeoutSec 180
+        $downloaded = $false
+        if ($curl) {
+            & $curl.Source -s -L --max-time 180 -o $zip ([string]$m.url)
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $zip)) {
+                $downloaded = $true
+            }
+        }
+        if (-not $downloaded) {
+            Invoke-WebRequest -Uri ([string]$m.url) -OutFile $zip -UseBasicParsing -TimeoutSec 180
+        }
 
         $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
         $rsa.FromXmlString((Get-Content -LiteralPath (Join-Path $AppDir 'update-public-key.xml') -Raw))
