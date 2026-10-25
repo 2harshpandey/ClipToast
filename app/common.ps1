@@ -30,12 +30,12 @@ try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'
 
-# Safe unicode characters constructed at runtime to guarantee zero ANSI/mojibake issues
-$EmojiMusic  = [char]::ConvertFromUtf32(0x1F3B5)               # 🎵
-$EmojiVideo  = [char]::ConvertFromUtf32(0x1F4E5)               # 📥
-$EmojiFolder = [char]::ConvertFromUtf32(0x1F4C1)               # 📁
-$EmojiGear   = [char]::ConvertFromUtf32(0x2699) + [char]0xFE0F # ⚙️
-$EmojiExit   = [char]::ConvertFromUtf32(0x274C)               # ❌
+# Safe unicode characters constructed at runtime to guarantee zero ANSI/mojibake issues (scoped for dot-sourcing)
+$script:EmojiMusic  = [char]::ConvertFromUtf32(0x1F3B5)               # 🎵
+$script:EmojiVideo  = [char]::ConvertFromUtf32(0x1F4E5)               # 📥
+$script:EmojiFolder = [char]::ConvertFromUtf32(0x1F4C1)               # 📁
+$script:EmojiGear   = [char]::ConvertFromUtf32(0x2699) + [char]0xFE0F # ⚙️
+$script:EmojiExit   = [char]::ConvertFromUtf32(0x274C)               # ❌
 
 try { if ((Test-Path -LiteralPath $LogPath) -and ((Get-Item -LiteralPath $LogPath).Length -gt 1MB)) { Remove-Item -LiteralPath $LogPath -Force } } catch {}
 
