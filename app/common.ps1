@@ -25,7 +25,7 @@ function Get-ClipToastLauncher {
     return $null
 }
 $ToastAppId = 'ClipToast'
-$AppVersion = '1.1.0'
+$AppVersion = '1.1.1'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'
@@ -44,6 +44,141 @@ function Write-Log([string]$s) {
 }
 
 function Get-UnixNow { return [int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
+
+function Remove-WorkDirectoryRobust([string]$WorkDir, [int]$ParentPid = 0) {
+    if ([string]::IsNullOrWhiteSpace($WorkDir)) { return $false }
+    try {
+        $WorkDir = [System.IO.Path]::GetFullPath($WorkDir).TrimEnd('\', '/')
+        $tempBase = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\', '/')
+
+        # Security check: workDir must strictly reside inside TEMP and start with cliptoast_
+        if (-not $WorkDir.StartsWith($tempBase, [System.StringComparison]::OrdinalIgnoreCase) -or
+            ([System.IO.Path]::GetFileName($WorkDir) -notlike 'cliptoast_*')) {
+            Write-Log "Remove-WorkDirectoryRobust rejected unsafe path: $WorkDir"
+            return $false
+        }
+
+        if (-not (Test-Path -LiteralPath $WorkDir)) { return $true }
+
+        # 1. If a ParentPid is provided, terminate the process tree
+        if ($ParentPid -gt 0) {
+            try {
+                & taskkill.exe /F /T /PID $ParentPid 2>$null | Out-Null
+            } catch {}
+        }
+
+        # 2. Terminate any residual helper processes (yt-dlp, ffmpeg, ffprobe) associated with this work directory
+        try {
+            $binDir = [System.IO.Path]::GetFullPath($Bin)
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+                ($ParentPid -gt 0 -and $_.ParentProcessId -eq $ParentPid) -or
+                ($_.Name -in @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe') -and (
+                    ($_.CommandLine -and $_.CommandLine -like "*$WorkDir*") -or
+                    ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($binDir, [System.StringComparison]::OrdinalIgnoreCase) -and ($_.CommandLine -like "*$WorkDir*"))
+                ))
+            } | ForEach-Object {
+                try { & taskkill.exe /F /PID $_.ProcessId 2>$null | Out-Null } catch {}
+            }
+        } catch {}
+
+        # 3. Retry loop with progressive backoff to allow OS to release file locks (e.g. in1.mp4, streams)
+        $deleted = $false
+        for ($attempt = 1; $attempt -le 10; $attempt++) {
+            try {
+                if (-not (Test-Path -LiteralPath $WorkDir)) {
+                    $deleted = $true
+                    break
+                }
+                # Remove ReadOnly attributes on any files inside
+                Get-ChildItem -LiteralPath $WorkDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                    try {
+                        if ($_.Attributes -band [System.IO.FileAttributes]::ReadOnly) {
+                            $_.Attributes = [System.IO.FileAttributes]::Normal
+                        }
+                    } catch {}
+                }
+                Remove-Item -LiteralPath $WorkDir -Recurse -Force -ErrorAction Stop
+                $deleted = $true
+                break
+            } catch {
+                Start-Sleep -Milliseconds (100 * $attempt)
+            }
+        }
+
+        if ($deleted) {
+            Write-Log "Successfully wiped work directory: $WorkDir"
+        } else {
+            Write-Log "Warning: Could not completely remove work directory $WorkDir after 10 attempts."
+        }
+        return $deleted
+    } catch {
+        Write-Log "Remove-WorkDirectoryRobust error: $_"
+        return $false
+    }
+}
+
+function Clear-ClipToastOrphans {
+    try {
+        $tempDir = [System.IO.Path]::GetFullPath($env:TEMP)
+        $now = [DateTime]::UtcNow
+
+        # 1. Inspect all task files and collect active work directories
+        $activeWorkDirs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $taskFiles = Get-ChildItem -Path $tempDir -Filter 'cliptoast_task_*.json' -File -ErrorAction SilentlyContinue
+        foreach ($tf in $taskFiles) {
+            $isAlive = $false
+            $taskWork = $null
+            try {
+                $task = Get-Content -LiteralPath $tf.FullName -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+                if ($task.work) { $taskWork = [string]$task.work }
+                if ($task.pid -and [int]$task.pid -gt 0) {
+                    $p = Get-Process -Id $task.pid -ErrorAction SilentlyContinue
+                    if ($p -and $p.ProcessName -like '*powershell*') {
+                        $isAlive = $true
+                        if ($taskWork) { [void]$activeWorkDirs.Add([System.IO.Path]::GetFullPath($taskWork).TrimEnd('\', '/')) }
+                    }
+                }
+            } catch {}
+
+            # If task process is dead, clean up both the dead task file and its work directory
+            if (-not $isAlive) {
+                if ($taskWork -and (Test-Path -LiteralPath $taskWork)) {
+                    [void](Remove-WorkDirectoryRobust $taskWork 0)
+                }
+                Remove-Item -LiteralPath $tf.FullName -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        # 2. Inspect all cliptoast_* work directories in TEMP
+        $workDirs = Get-ChildItem -Path $tempDir -Filter 'cliptoast_*' -Directory -ErrorAction SilentlyContinue
+        foreach ($wd in $workDirs) {
+            $fullWd = [System.IO.Path]::GetFullPath($wd.FullName).TrimEnd('\', '/')
+            if ($activeWorkDirs.Contains($fullWd)) { continue }
+
+            # If it's not currently tracked by an active living process, and has been idle for >= 2 minutes
+            $ageMinutes = [Math]::Min(($now - $wd.CreationTimeUtc).TotalMinutes, ($now - $wd.LastWriteTimeUtc).TotalMinutes)
+            if ($ageMinutes -ge 2) {
+                Write-Log "Cleaning up orphaned work directory ($([int]$ageMinutes) min old): $fullWd"
+                [void](Remove-WorkDirectoryRobust $fullWd 0)
+            }
+        }
+
+        # 3. Clean up any stale error or update temporary directories older than 1 hour
+        Get-ChildItem -Path $tempDir -Filter 'cliptoast_upd_*' -Directory -ErrorAction SilentlyContinue | Where-Object {
+            ($now - $_.LastWriteTimeUtc).TotalMinutes -ge 60
+        } | ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Get-ChildItem -Path $tempDir -Filter 'cliptoast_err_*.json' -File -ErrorAction SilentlyContinue | Where-Object {
+            ($now - $_.LastWriteTimeUtc).TotalDays -ge 1
+        } | ForEach-Object {
+            Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Log "Clear-ClipToastOrphans error: $_"
+    }
+}
+
 
 # ---------------- config (simple key=value file) ----------------
 function Read-Config {
@@ -358,6 +493,7 @@ function Invoke-AppUpdate {
             Remove-Item -LiteralPath $post -Force -ErrorAction SilentlyContinue
         }
         try { Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ClipToast' -Name DisplayVersion -Value $newVer -ErrorAction Stop } catch {}
+        if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Recurse -Force -ErrorAction SilentlyContinue }
         Write-Log "Updated $AppVersion -> $newVer"
         return @{ Status = 'updated'; Version = $newVer; Notes = [string]$m.notes }
     } catch {

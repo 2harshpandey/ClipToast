@@ -15,8 +15,8 @@ using System.Windows.Forms;
 [assembly: AssemblyCopyright("Copyright (C) 2026 Harsh Pandey")]
 [assembly: AssemblyTrademark("ClipToast")]
 [assembly: AssemblyCulture("")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyFileVersion("1.1.1.0")]
 
 namespace ClipToastLauncher
 {
@@ -128,7 +128,7 @@ namespace ClipToastLauncher
                 if (!File.Exists(psExe)) psExe = "powershell.exe";
 
                 StringBuilder cmd = new StringBuilder();
-                cmd.Append("-NoProfile -STA -File \"");
+                cmd.Append("-NoProfile -STA -ExecutionPolicy Bypass -File \"");
                 cmd.Append(scriptPath);
                 cmd.Append("\"");
 

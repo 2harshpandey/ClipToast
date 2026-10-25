@@ -19,6 +19,9 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
+# Clean up any leftover temporary files or orphaned folders from previous sessions immediately
+Clear-ClipToastOrphans
+
 # Global low-level keyboard hook to capture Ctrl+Alt+G (Video) and Ctrl+Alt+A / Ctrl+Alt+M (Audio)
 # This guarantees 100% reliable hotkey delivery even if another app called RegisterHotKey or Explorer didn't refresh
 if (-not ([System.Management.Automation.PSTypeName]'ClipToastHotkeys').Type) {
@@ -236,6 +239,7 @@ $pollTimer.Add_Tick({
         if ($script:exitEvent.WaitOne(0)) {
             $pollTimer.Stop()
             $pollTimer.Dispose()
+            if ($cleanTimer) { $cleanTimer.Stop(); $cleanTimer.Dispose() }
             try { [ClipToastHotkeys]::Stop() } catch {}
             try {
                 $notifyIcon.Visible = $false
@@ -245,15 +249,25 @@ $pollTimer.Add_Tick({
                 try { $mutex.ReleaseMutex() } catch {}
                 $mutex.Dispose()
             }
+            Clear-ClipToastOrphans
             [System.Windows.Forms.Application]::Exit()
         }
     } catch {}
 })
 $pollTimer.Start()
 
+# Periodic background orphan cleaner (runs every 10 minutes)
+$cleanTimer = New-Object System.Windows.Forms.Timer
+$cleanTimer.Interval = 600000
+$cleanTimer.Add_Tick({
+    Clear-ClipToastOrphans
+})
+$cleanTimer.Start()
+
 try {
     [System.Windows.Forms.Application]::Run()
 } finally {
+    try { if ($cleanTimer) { $cleanTimer.Stop(); $cleanTimer.Dispose() } } catch {}
     try { [ClipToastHotkeys]::Stop() } catch {}
     try {
         $notifyIcon.Visible = $false
@@ -263,4 +277,5 @@ try {
         try { $mutex.ReleaseMutex() } catch {}
         $mutex.Dispose()
     }
+    Clear-ClipToastOrphans
 }

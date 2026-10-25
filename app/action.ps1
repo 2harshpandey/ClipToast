@@ -1,4 +1,4 @@
-﻿# action.ps1 - handles protocol actions from toast notifications (cliptoast://)
+# action.ps1 - handles protocol actions from toast notifications (cliptoast://)
 param([string]$Uri)
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -32,18 +32,12 @@ if ($Uri -like 'cliptoast:cancel:*') {
     if (Test-Path -LiteralPath $taskFile) {
         try {
             $task = Get-Content -LiteralPath $taskFile -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($task.pid -and [int]$task.pid -gt 0) {
-                # Security: verify process exists and is a powershell instance before terminating
-                $proc = Get-Process -Id $task.pid -ErrorAction SilentlyContinue
-                if ($proc -and $proc.ProcessName -like '*powershell*') {
-                    Write-Log ("Cancelling task PID " + $task.pid)
-                    & taskkill.exe /F /T /PID $task.pid 2>$null | Out-Null
-                }
-            }
-            # Security: ensure work directory is strictly inside TEMP\cliptoast_* before wiping
-            if ($task.work -and (Test-Path -LiteralPath $task.work) -and ($task.work -like (Join-Path $env:TEMP 'cliptoast_*'))) {
-                Remove-Item -LiteralPath $task.work -Recurse -Force -ErrorAction SilentlyContinue
-            }
+            $targetPid = if ($task.pid) { [int]$task.pid } else { 0 }
+            $workPath = if ($task.work) { [string]$task.work } else { '' }
+
+            Write-Log ("Cancelling task tag $tag (PID: $targetPid, Work: $workPath)")
+            # Terminate downloader process tree and robustly clean up all files and work directory
+            [void](Remove-WorkDirectoryRobust $workPath $targetPid)
         } catch {
             Write-Log "Cancel task error: $_"
         } finally {
@@ -59,13 +53,21 @@ if ($Uri -like 'cliptoast:open:*') {
     $b64 = $Uri.Substring('cliptoast:open:'.Length)
     try {
         $path = From-SafeBase64 $b64
-        if ($path -and (Test-Path -LiteralPath $path)) {
-            $item = Get-Item -LiteralPath $path
-            if ($item -is [System.IO.DirectoryInfo]) {
-                Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $item.FullName)
+        if ($path) {
+            if (Test-Path -LiteralPath $path) {
+                $item = Get-Item -LiteralPath $path
+                if ($item -is [System.IO.DirectoryInfo]) {
+                    Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $item.FullName)
+                } else {
+                    # Reveal and select the downloaded file in Explorer
+                    Start-Process -FilePath 'explorer.exe' -ArgumentList ('/select,"{0}"' -f $item.FullName)
+                }
             } else {
-                # Reveal and select the downloaded file in Explorer
-                Start-Process -FilePath 'explorer.exe' -ArgumentList ('/select,"{0}"' -f $item.FullName)
+                # Fallback: if file was moved or renamed, open the parent directory
+                $parent = Split-Path -Parent $path
+                if ($parent -and (Test-Path -LiteralPath $parent)) {
+                    Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $parent)
+                }
             }
         }
     } catch {
@@ -85,7 +87,7 @@ if ($Uri -like 'cliptoast:play:*') {
             $ext = $item.Extension.ToLower()
             $allowedMediaExts = @('.mp4', '.mp3', '.mkv', '.webm', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.opus', '.mov')
             if ($ext -in $allowedMediaExts -and -not ($item -is [System.IO.DirectoryInfo])) {
-                Start-Process -FilePath $item.FullName
+                Invoke-Item -LiteralPath $item.FullName
             } else {
                 Write-Log "Play blocked: non-media extension $ext on $path"
             }
@@ -95,6 +97,7 @@ if ($Uri -like 'cliptoast:play:*') {
     }
     exit 0
 }
+
 
 # 4. Action: Anonymous Error Report via GitHub Issues
 if ($Uri -like 'cliptoast:report:*') {

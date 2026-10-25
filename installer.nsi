@@ -2,7 +2,7 @@
 ; Build:  makensis -DUPDATE_URL=https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json installer.nsi
 Unicode true
 !define APP_NAME "ClipToast"
-!define APP_VERSION "1.1.0"
+!define APP_VERSION "1.1.1"
 !ifndef UPDATE_URL
   !define UPDATE_URL "https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json"
 !endif
@@ -11,22 +11,23 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 
+Name "${APP_NAME}"
 !ifndef OUT_FILE
-  !define OUT_FILE "release\ClipToastSetup-v1.1.exe"
+  !define OUT_FILE "release\ClipToastSetup-v1.1.1.exe"
 !endif
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\ClipToast"
 RequestExecutionLevel user
 SetCompressor zlib
 BrandingText "${APP_NAME} ${APP_VERSION}"
-VIProductVersion "1.1.0.0"
+VIProductVersion "1.1.1.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} - Seamless Windows Clipboard Media Downloader"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ClipToast"
 VIAddVersionKey "CompanyName" "ClipToast"
-VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.exe"
+VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.1.exe"
 
 Var DownloadDir
 
@@ -37,7 +38,7 @@ Var DownloadDir
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "installer-sidebar.bmp"
 
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME}"
-!define MUI_WELCOMEPAGE_TEXT "A modern, zero-friction clipboard media downloader for Windows 11 and 10.$\r$\n$\r$\nSimply copy any media link and trigger your download:$\r$\n$\r$\n  • Ctrl + Alt + G$\r$\n    Download highest quality WhatsApp-ready MP4$\r$\n$\r$\n  • Ctrl + Alt + A  (or Ctrl + Alt + M)$\r$\n    Extract clean 320kbps MP3 audio with cover art$\r$\n$\r$\n  • System Tray Icon$\r$\n    1-click downloads & settings near your taskbar clock$\r$\n$\r$\nFast, lightweight, and installs without administrator privileges."
+!define MUI_WELCOMEPAGE_TEXT "A modern, zero-friction clipboard media downloader for Windows 11 and 10.$\r$\n$\r$\nSimply copy any media link and trigger your download:$\r$\n$\r$\n  Ctrl + Alt + G$\r$\n    Download highest quality WhatsApp-ready MP4$\r$\n$\r$\n  Ctrl + Alt + A  (or Ctrl + Alt + M)$\r$\n    Extract clean 320kbps MP3 audio with cover art$\r$\n$\r$\n  System Tray Icon$\r$\n    1-click downloads && settings near your taskbar clock$\r$\n$\r$\nFast, lightweight, and installs without administrator privileges."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirPre
@@ -144,6 +145,9 @@ Section "Uninstall"
   ; Stop running tray instances cleanly via exit event
   ExecWait '"$INSTDIR\ClipToast.exe" --stop'
   Sleep 600
+
+  ; Clean up any leftover temporary staging folders from TEMP
+  ExecWait 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter cliptoast_* | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"'
 
   Delete "$SMPROGRAMS\ClipToast.lnk"
   Delete "$SMPROGRAMS\ClipToast Audio.lnk"

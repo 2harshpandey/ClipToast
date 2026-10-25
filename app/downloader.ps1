@@ -6,6 +6,7 @@ try { $OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $env:PYTHONIOENCODING = 'utf-8'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Initialize-Toast
+Clear-ClipToastOrphans
 
 $cfg     = Read-Config
 $yt      = Join-Path $Bin 'yt-dlp.exe'
@@ -79,11 +80,14 @@ try {
     Get-ChildItem -Path $env:TEMP -Filter "cliptoast_task_*.json" -ErrorAction SilentlyContinue | ForEach-Object {
         try {
             $tData = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
-            if ($tData.pid -ne $PID -and $tData.url -eq $url -and [bool]$tData.audioOnly -eq [bool]$AudioOnly) {
-                $p = Get-Process -Id $tData.pid -ErrorAction SilentlyContinue
-                if ($p -and ($nowUnix - [int64]$tData.time) -lt 4) {
+            $p = if ($tData.pid) { Get-Process -Id $tData.pid -ErrorAction SilentlyContinue } else { $null }
+            if ($p -and $tData.pid -ne $PID -and $tData.url -eq $url -and [bool]$tData.audioOnly -eq [bool]$AudioOnly) {
+                if (($nowUnix - [int64]$tData.time) -lt 4) {
                     $duplicateFound = $true
                 }
+            } elseif (-not $p) {
+                # Clean up leftover task file from terminated process
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
             }
         } catch {}
     }
@@ -112,8 +116,9 @@ try {
     } | ConvertTo-Json | Set-Content -LiteralPath $taskFile -Encoding UTF8
 } catch {}
 
-$headline = if ($AudioOnly) { 'Starting audio download (MP3)...' } else { 'Starting download...' }
-Show-ProgressToast $tag $headline (Limit-Text $url 60) 'indeterminate' '' 'Contacting the site...'
+try {
+    $headline = if ($AudioOnly) { 'Starting audio download (MP3)...' } else { 'Starting download...' }
+    Show-ProgressToast $tag $headline (Limit-Text $url 60) 'indeterminate' '' 'Contacting the site...'
 
 # ---------- 4. download: best video + best audio OR 320kbps MP3 audio ----------
 if ($AudioOnly) {
@@ -306,23 +311,37 @@ if ($script:ytCode -ne 0) {
 
     Write-Log "DOWNLOAD FAILED: $err"
     Show-Toast 'Download failed' (Limit-Text $err 130) $tag '' '' $tag
-    Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
 
 # ---------- 5. save audio / process video for WhatsApp compatibility ----------
 function Move-Unique([string]$src, [string]$name) {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    $base = [IO.Path]::GetFileNameWithoutExtension($name)
+    $base = [IO.Path]::GetFileNameWithoutExtension($name).Trim(' .')
+    if (-not $base) { $base = 'Media' }
     $ext  = [IO.Path]::GetExtension($name)
-    $target = Join-Path $dest $name
+    $target = Join-Path $dest ($base + $ext)
     $i = 1
     while (Test-Path -LiteralPath $target) {
         $target = Join-Path $dest ("{0} ({1}){2}" -f $base, $i, $ext)
         $i++
     }
-    Move-Item -LiteralPath $src -Destination $target
+
+    # Resilient move with retries for cross-drive operations and indexer file locks
+    $moved = $false
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Move-Item -LiteralPath $src -Destination $target -Force -ErrorAction Stop
+            $moved = $true
+            break
+        } catch {
+            Start-Sleep -Milliseconds (100 * $attempt)
+        }
+    }
+    if (-not $moved) {
+        Copy-Item -LiteralPath $src -Destination $target -Force
+        Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue
+    }
     return $target
 }
 function Get-Probe([string]$file, [string]$stream, [string]$entry) {
@@ -419,8 +438,6 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     $saved += (Move-Unique $outFile $display)
 }
 
-Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue
-
 if ($saved.Count -eq 0) {
     Show-Toast 'ClipToast' 'Nothing was saved. Details are in log.txt in %LOCALAPPDATA%\ClipToast' $tag
 } elseif ($saved.Count -eq 1) {
@@ -438,5 +455,12 @@ if ($saved.Count -eq 0) {
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
     Show-Toast $title ("{0}{1}  ({2})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $subLabel, $size) $tag $dest $mainFile
 }
-Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
 Write-Log ('DONE ' + ($saved -join ' | '))
+} finally {
+    if ($Work) {
+        [void](Remove-WorkDirectoryRobust $Work 0)
+    }
+    if ($taskFile -and (Test-Path -LiteralPath $taskFile)) {
+        Remove-Item -LiteralPath $taskFile -Force -ErrorAction SilentlyContinue
+    }
+}
