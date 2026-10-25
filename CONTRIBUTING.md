@@ -15,7 +15,7 @@ This project and everyone participating in it is governed by the [ClipToast Code
 ### Reporting Bugs
 Before creating bug reports, please check existing issues to avoid duplicates. When filing a bug report, please include:
 * **Operating System & Version** (e.g. Windows 11 Build 22631).
-* **ClipToast Version** (e.g. 1.1.0).
+* **ClipToast Version** (e.g. 1.1.1).
 * **Steps to Reproduce** the issue clearly.
 * **Expected vs. Actual Behavior**.
 * Relevant snippets from `%LOCALAPPDATA%\ClipToast\log.txt` (ensure no private URLs/tokens are exposed).
@@ -50,9 +50,9 @@ ClipToast/
 │   ├── cliptoast.png         # Modern toast logo
 │   └── version.txt           # App version manifest
 ├── release/                  # Built distribution assets
-│   ├── ClipToastSetup-v1.1.exe   # Setup installer wizard
-│   ├── ClipToast-v1.1.0-portable.zip # Zero-install portable package
-│   ├── ClipToast-app-1.1.0.zip   # Signed auto-update bundle
+│   ├── ClipToastSetup-v1.1.1.exe # Setup installer wizard
+│   ├── ClipToast-v1.1.1-portable.zip # Zero-install portable package
+│   ├── ClipToast-app-1.1.1.zip   # Signed auto-update bundle
 │   └── latest.json           # Cryptographic signature manifest
 ├── src/
 │   └── launcher/
@@ -73,12 +73,12 @@ To recompile the C# launcher:
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /win32icon:cliptoast.ico /reference:System.Windows.Forms.dll,System.Drawing.dll /optimize+ /platform:anycpu /out:src\launcher\ClipToast.exe src\launcher\Program.cs
 ```
 
-### 3. Building the Installer (`ClipToastSetup-v1.1.exe`)
+### 3. Building the Installer (`ClipToastSetup-v1.1.1.exe`)
 To build the setup installer using NSIS:
 ```cmd
 makensis.exe installer.nsi
 ```
-The output executable will be created in `release\ClipToastSetup-v1.1.exe`.
+The output executable will be created in `release\ClipToastSetup-v1.1.1.exe`.
 
 ### 4. Testing Locally
 To test without running the installer:

@@ -54,6 +54,6 @@ Because ClipToast is an independent open-source project without a paid corporate
 * **Clean Verifications:** ClipToast is verified clean against major antivirus engines including Microsoft Defender, Kaspersky, BitDefender, Avast, AVG, and CrowdStrike.
 * **SHA-256 Checksums:** Cryptographic SHA-256 checksums are published with every official release. Users can verify the integrity of their download independently:
   ```powershell
-  Get-FileHash ClipToastSetup-v1.1.exe -Algorithm SHA256
+  Get-FileHash ClipToastSetup-v1.1.1.exe -Algorithm SHA256
   ```
 * **Source Transparency:** Every line of code is open source and available for inspection in this repository.

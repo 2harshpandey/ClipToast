@@ -21,7 +21,7 @@ A clear and concise description of what you expected to happen.
 
 **Environment Information:**
  - OS: [e.g. Windows 11 Build 22631 / Windows 10]
- - ClipToast Version: [e.g. 1.1.0]
+ - ClipToast Version: [e.g. 1.1.1]
  - Installation Type: [Installer / Portable ZIP]
 
 **Additional Context / Log Snippet**
