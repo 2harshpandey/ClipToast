@@ -71,6 +71,7 @@ if (-not $url) {
     Show-Toast 'ClipToast' 'No link found in clipboard. Copy a YouTube, Instagram, or media link first, then try again.' $tag
     exit 1
 }
+$url = $url.TrimEnd('.', ',', ')', ']', ';', "'", '"')
 Write-Log "START url=$url AudioOnly=$AudioOnly"
 
 # Prevent duplicate concurrent downloads of the exact same URL within 4 seconds
@@ -153,7 +154,7 @@ if ($AudioOnly) {
     # We use format sorting (-S res:...) to cap resolution by the shortest edge.
     # This properly handles both landscape (1920x1080) and vertical videos (1080x1920 Instagram Reels/Shorts/TikTok)
     # without failing with "Requested format is not available".
-    $fmt = 'bv*[dynamic_range=SDR]+ba/b[dynamic_range=SDR]/bv*+ba/b/best'
+    $fmt = 'bv*[dynamic_range=SDR]+ba/b[dynamic_range=SDR]/bv*+ba/b/bv*/best'
     $ytArgs = @(
         '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
         '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
