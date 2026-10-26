@@ -457,13 +457,13 @@ if ($saved.Count -eq 0) {
 } elseif ($saved.Count -eq 1) {
     $mainFile = $saved[0]
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
-    $title = if ($AudioOnly -or $mainFile -match '\.(mp3|m4a|aac|opus|flac|wav)$') { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
+    $title = if ($AudioOnly -or $mainFile -match '\.(mp3|m4a|aac|opus|flac|wav)$') { 'Audio downloaded' } else { 'Download complete' }
     $subNote = if ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly -and -not $mainFile.EndsWith('.srt')) { " (Subtitles not available for this video)" } else { '' }
     Show-Toast $title ("{0}  ({1}){2}" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $size, $subNote) $tag $dest $mainFile
 } else {
     $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
     if (-not $mainFile) { $mainFile = $saved[0] }
-    $title = if ($AudioOnly) { "$EmojiMusic Audio downloaded" } else { 'Download complete' }
+    $title = if ($AudioOnly) { 'Audio downloaded' } else { 'Download complete' }
     $hasSubs = ($saved | Where-Object { $_ -match '\.(srt|vtt)$' }).Count -gt 0
     $subLabel = if ($hasSubs) { ' (+ subtitles)' } elseif ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly) { ' (Subtitles not available)' } else { '' }
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
