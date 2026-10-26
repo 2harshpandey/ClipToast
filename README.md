@@ -40,7 +40,7 @@ ClipToast is a media downloader for Windows 10 and 11. Copy any video or music l
 
 ## Supported Platforms
 
-ClipToast uses yt-dlp as its extraction engine, which supports media from more than one thousand sites.
+ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engine, which supports media from more than one thousand sites.
 
 | Platform | Capabilities |
 | :--- | :--- |
@@ -156,7 +156,7 @@ ClipToast/
 
 ### Dependencies
 
-Runtime tools including yt-dlp, FFmpeg, ffprobe, and Deno are downloaded directly from their official releases and placed in local application data under the bin directory.
+Runtime tools including [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org/), [ffprobe](https://ffmpeg.org/), and [Deno](https://deno.land/) are downloaded directly from their official releases and placed in local application data under the bin directory.
 
 ---
 
@@ -215,4 +215,4 @@ This generates the update zip, the portable zip, and the latest.json metadata fi
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). Built using yt-dlp, FFmpeg, and Deno.
+This project is licensed under the [MIT License](LICENSE). Built using [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org/), and [Deno](https://deno.land/).
