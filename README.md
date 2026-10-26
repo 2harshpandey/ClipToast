@@ -3,6 +3,7 @@
 [![Windows 11](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white)](https://github.com/2harshpandey/ClipToast)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version 1.1.1](https://img.shields.io/badge/Version-1.1.1-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/2harshpandey/ClipToast?style=flat&logo=github)](https://github.com/2harshpandey/ClipToast/stargazers)
 [![Powered by yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red.svg)](https://github.com/yt-dlp/yt-dlp)
 [![Media Processing](https://img.shields.io/badge/Converter-FFmpeg-green.svg)](https://ffmpeg.org/)
 
@@ -60,7 +61,7 @@ ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engi
 ### Installer Setup
 
 1. Open the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
-2. Download `ClipToastSetup-v1.1.1.exe`.
+2. Download [ClipToastSetup-v1.1.1.exe](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToastSetup-v1.1.1.exe).
 3. Run the installer. No administrator rights are needed.
 4. Select your preferred download directory.
 5. ClipToast sets up required tools and places an icon in your notification area.
@@ -71,7 +72,7 @@ If Windows SmartScreen shows a warning on first run because the project is indep
 
 If you prefer to run ClipToast without installing:
 
-1. Download `ClipToast-v1.1.1-portable.zip` from the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
+1. Download [ClipToast-v1.1.1-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.1-portable.zip) from the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
 2. Extract the archive into a folder of your choice.
 3. Run `ClipToast.exe` directly.
 
