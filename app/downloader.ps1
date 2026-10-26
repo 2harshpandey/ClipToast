@@ -137,15 +137,28 @@ if ($AudioOnly) {
         '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)j'
     )
 } else {
-    $h = ''
-    if ([int](ConvertTo-Num $cfg['MaxHeight']) -gt 0) { $h = '[height<=' + [int](ConvertTo-Num $cfg['MaxHeight']) + ']' }
+    $maxH = [int](ConvertTo-Num $cfg['MaxHeight'])
+    $sortList = New-Object System.Collections.Generic.List[string]
+    if ($maxH -gt 0) {
+        $sortList.Add("res:$maxH")
+    } else {
+        $sortList.Add('res')
+    }
+    $sortList.Add('fps')
+    $sortList.Add('vcodec:h264')
+    $sortList.Add('abr')
+    $sortStr = $sortList -join ','
+
     # Prefer SDR (HDR -> SDR conversion looks washed out), then anything.
-    $fmt = "bv*${h}[dynamic_range=SDR]+ba/bv*${h}+ba/b${h}"
+    # We use format sorting (-S res:...) to cap resolution by the shortest edge.
+    # This properly handles both landscape (1920x1080) and vertical videos (1080x1920 Instagram Reels/Shorts/TikTok)
+    # without failing with "Requested format is not available".
+    $fmt = 'bv*[dynamic_range=SDR]+ba/b[dynamic_range=SDR]/bv*+ba/b/best'
     $ytArgs = @(
         '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
         '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
         '-f', $fmt,
-        '-S', 'res,fps,vcodec:h264,abr',     # highest resolution, then fps, then prefer H.264 (no re-encode), then best audio
+        '-S', $sortStr,
         '--merge-output-format', 'mkv',
         '--concurrent-fragments', '8',
         '--windows-filenames',
