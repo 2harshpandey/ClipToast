@@ -18,7 +18,8 @@ Name "${APP_NAME}"
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\ClipToast"
 RequestExecutionLevel user
-SetCompressor zlib
+SetCompressor /SOLID lzma
+CRCCheck on
 BrandingText "${APP_NAME} ${APP_VERSION}"
 VIProductVersion "1.1.1.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
