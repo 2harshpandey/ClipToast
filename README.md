@@ -68,10 +68,6 @@ ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engi
 
 If Windows SmartScreen shows a warning on first run because the project is independent and not signed with an expensive commercial certificate, click More info and then Run anyway.
 
-### Code Signing
-
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-
 ### Portable Version
 
 If you prefer to run ClipToast without installing:
