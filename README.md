@@ -89,9 +89,9 @@ If you prefer to run ClipToast without installing:
 4. When finished, use the Play button to watch or listen immediately, or use Open folder to view the file in File Explorer.
 
 <div align="center">
-  <img src=".github/assets/screenshot-toast-progress.png" alt="ClipToast Download in Progress" width="370" />
+  <img src=".github/assets/toast-progress.png" alt="ClipToast Download in Progress" width="370" />
   &nbsp;&nbsp;
-  <img src=".github/assets/screenshot-toast-finished.png" alt="ClipToast Download Finished" width="370" />
+  <img src=".github/assets/toast-finished.png" alt="ClipToast Download Finished" width="370" />
   <p><em>Real-time download progress toast on the left and completed notification with instant playback actions on the right.</em></p>
 </div>
 
