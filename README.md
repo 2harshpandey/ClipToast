@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version 1.1.1](https://img.shields.io/badge/Version-1.1.1-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/2harshpandey/ClipToast?style=flat&logo=github)](https://github.com/2harshpandey/ClipToast/stargazers)
+[![AlternativeTo](https://img.shields.io/badge/AlternativeTo-ClipToast-0078D6?logo=alternativeto&logoColor=white)](https://alternativeto.net/software/cliptoast/)
 [![Powered by yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red.svg)](https://github.com/yt-dlp/yt-dlp)
 [![Media Processing](https://img.shields.io/badge/Converter-FFmpeg-green.svg)](https://ffmpeg.org/)
 
