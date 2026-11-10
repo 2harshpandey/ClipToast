@@ -1,8 +1,12 @@
 ; ClipToast installer (NSIS). Per-user install: no admin rights, no UAC prompt.
 ; Build:  makensis -DUPDATE_URL=https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json installer.nsi
 Unicode true
-!define APP_NAME "ClipToast"
-!define APP_VERSION "1.1.1"
+!ifndef APP_NAME
+  !define APP_NAME "ClipToast"
+!endif
+!ifndef APP_VERSION
+  !define APP_VERSION "1.1.1"
+!endif
 !ifndef UPDATE_URL
   !define UPDATE_URL "https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json"
 !endif
@@ -81,10 +85,8 @@ Section "Install"
   File /r "app\*.*"
 
   ; Bundle pre-built binaries if present in source bin folder at build time
-  !ifexists "bin\yt-dlp.exe"
-    SetOutPath "$INSTDIR\bin"
-    File /r "bin\*.*"
-  !endif
+  SetOutPath "$INSTDIR\bin"
+  File /nonfatal /r "bin\*.*"
 
   ; If migrating from legacy LinkGrab folder, reuse downloaded tools to save bandwidth
   ${If} ${FileExists} "$LOCALAPPDATA\LinkGrab\bin\yt-dlp.exe"

@@ -63,6 +63,30 @@ if ($makensis) {
     Write-Host "   To build the installer executable, install NSIS (e.g. 'winget install NSIS.NSIS') and rerun this script." -ForegroundColor Yellow
 }
 
+# 4. Package Portable Zero-Install ZIP
+Write-Host "4. Packaging portable zip package..." -ForegroundColor Cyan
+$portableZip = Join-Path $outDir ("ClipToast-v$Version-portable.zip")
+if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
+
+$portableDir = Join-Path $env:TEMP ('cliptoast_port_' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+try {
+    $portClipDir = Join-Path $portableDir 'ClipToast'
+    New-Item -ItemType Directory -Force -Path $portClipDir | Out-Null
+    Copy-Item $launcherOut (Join-Path $portClipDir 'ClipToast.exe') -Force
+    Copy-Item (Join-Path $rootDir 'cliptoast.ico') (Join-Path $portClipDir 'cliptoast.ico') -Force
+    Copy-Item (Join-Path $rootDir 'cliptoast.png') (Join-Path $portClipDir 'cliptoast.png') -Force
+    Copy-Item (Join-Path $rootDir 'LICENSE') (Join-Path $portClipDir 'LICENSE') -Force
+    Copy-Item (Join-Path $rootDir 'README.md') (Join-Path $portClipDir 'README.md') -Force
+    Copy-Item (Join-Path $rootDir 'app') (Join-Path $portClipDir 'app') -Recurse -Force
+    if (Test-Path (Join-Path $rootDir 'bin')) {
+        Copy-Item (Join-Path $rootDir 'bin') (Join-Path $portClipDir 'bin') -Recurse -Force
+    }
+    Compress-Archive -Path (Join-Path $portableDir '*') -DestinationPath $portableZip -Force
+    Write-Host "   Portable package built successfully: $portableZip" -ForegroundColor Green
+} finally {
+    Remove-Item -LiteralPath $portableDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host " Build completed!" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
