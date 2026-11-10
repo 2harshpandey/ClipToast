@@ -88,6 +88,11 @@ namespace ClipToastLauncher
                         script = "settings.ps1";
                         for (int i = 1; i < args.Length; i++) psArgs.Add(args[i]);
                     }
+                    else if (firstLower == "--tools" || firstLower == "-tools" || firstLower == "--install-tools" || firstLower == "-install-tools" || firstLower == "install-tools.ps1")
+                    {
+                        script = "install-tools.ps1";
+                        for (int i = 1; i < args.Length; i++) psArgs.Add(args[i]);
+                    }
                     else if (firstLower == "--action" || firstLower == "-action" || firstLower == "action.ps1")
                     {
                         script = "action.ps1";
@@ -149,10 +154,11 @@ namespace ClipToastLauncher
                     }
                 }
 
+                bool isConsole = (script == "install-tools.ps1" && (psArgs.Contains("-FromInstaller") || psArgs.Contains("-Force")));
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = psExe;
                 psi.Arguments = cmd.ToString();
-                psi.CreateNoWindow = true;
+                psi.CreateNoWindow = !isConsole;
                 psi.UseShellExecute = false;
                 psi.WorkingDirectory = exeDir;
                 psi.EnvironmentVariables["PSExecutionPolicyPreference"] = "Bypass";

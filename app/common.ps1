@@ -212,7 +212,11 @@ function Write-Config($cfg) {
 
 function Test-Tools {
     foreach ($n in 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe') {
-        if (-not (Test-Path -LiteralPath (Join-Path $Bin $n))) { return $false }
+        $p = Join-Path $Bin $n
+        if (-not (Test-Path -LiteralPath $p)) { return $false }
+        try {
+            if ((Get-Item -LiteralPath $p).Length -lt 10000) { return $false }
+        } catch { return $false }
     }
     return $true
 }

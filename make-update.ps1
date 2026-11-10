@@ -10,7 +10,8 @@ param(
     [string]$PrivateKey = '',
     [string]$Notes = '',
     [string]$AppDir = '',
-    [string]$OutDir = ''
+    [string]$OutDir = '',
+    [switch]$BundleTools
 )
 $ErrorActionPreference = 'Stop'
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -19,6 +20,11 @@ if (-not $OutDir) { $OutDir = Join-Path $scriptDir 'release' }
 if (-not $PrivateKey) { $PrivateKey = Join-Path $scriptDir 'PRIVATE-update-signing-key.xml' }
 if (-not $BaseUrl) {
     $BaseUrl = "https://github.com/2harshpandey/ClipToast/releases/download/v$Version"
+}
+
+if ($BundleTools) {
+    Write-Host "Pre-downloading dependencies into bin\ for bundled installer packaging..."
+    & (Join-Path $AppDir 'install-tools.ps1') -FromInstaller -Force
 }
 
 if (-not (Test-Path $AppDir)) { throw "App folder not found: $AppDir" }
@@ -71,9 +77,26 @@ try {
     Remove-Item -LiteralPath $portableDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Compile NSIS installer if makensis is available
+$makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+if (-not $makensis) {
+    foreach ($p in @(
+        'C:\Program Files (x86)\NSIS\makensis.exe',
+        'C:\Program Files\NSIS\makensis.exe',
+        (Join-Path $env:LOCALAPPDATA 'Programs\NSIS\makensis.exe')
+    )) {
+        if (Test-Path -LiteralPath $p) { $makensis = Get-Item $p; break }
+    }
+}
+$installerPath = Join-Path $OutDir "ClipToastSetup-v$Version.exe"
+if ($makensis) {
+    Write-Host "Compiling NSIS installer with $makensis to $installerPath ..."
+    & $makensis.FullName "/DOUT_FILE=$installerPath" "/DAPP_VERSION=$Version" (Join-Path $scriptDir 'installer.nsi')
+}
+
 Write-Host ''
 Write-Host "Done. Upload these files to your GitHub release (tag v$Version):" -ForegroundColor Green
-Write-Host "  $(Join-Path $OutDir 'ClipToastSetup-v1.1.exe')  (Installer)"
+Write-Host "  $installerPath  (Installer)"
 Write-Host "  $portableZip  (Portable Zero-Install ZIP)"
 Write-Host "  $zip  (Signed auto-update bundle)"
 Write-Host "  $(Join-Path $OutDir 'latest.json')  (Update signature manifest)"

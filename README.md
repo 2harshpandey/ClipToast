@@ -185,7 +185,7 @@ If Windows presents a blue protective prompt on first execution:
 - **Antivirus Clean**: Scans clean across Microsoft Defender, Kaspersky, BitDefender, Avast, Sophos, and CrowdStrike.
 - **Native Launcher**: ClipToast uses a compiled C# binary to launch background scripts rather than generic Windows script wrappers.
 - **Clean Installer**: The NSIS installer writes configuration directly without running hidden command line bypasses.
-- **On Demand Setup**: Tool downloads take place after installation so setup remains predictable and transparent.
+- **Automated Dependency Setup**: Required media tools (yt-dlp, FFmpeg, Deno) are installed directly during setup with progress feedback, and can also be repaired or verified anytime from Settings.
 - **Source Inspection**: The full source code is public and can be audited and built locally.
 
 ---

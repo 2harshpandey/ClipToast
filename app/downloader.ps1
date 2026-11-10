@@ -25,11 +25,36 @@ if ($cfg['StartWithWindows'] -ne '0') {
     } catch {}
 }
 
+# Capture intended link early so clipboard changes during initial tool setup do not lose user intent
+$url = ''
+if ($InputUrl) {
+    $m = [regex]::Match([string]$InputUrl, 'https?://[^\s"<>]+')
+    if ($m.Success) { $url = $m.Value }
+}
+if (-not $url) {
+    try {
+        $clip = Get-Clipboard -Raw
+        $m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
+        if ($m.Success) { $url = $m.Value }
+    } catch {}
+}
+if ($url) {
+    $url = $url.TrimEnd('.', ',', ')', ']', ';', "'", '"')
+}
+
 # ---------- 0. tools present? (first run / repair) ----------
 if (-not (Test-Tools)) {
-    Show-Toast 'ClipToast' 'First-time setup: configuring media tools (about 200 MB, happens once).' $tag
-    & (Join-Path $PSScriptRoot 'install-tools.ps1') | Out-Null
-    if (-not (Test-Tools)) { Show-Toast 'Setup failed' 'Could not download the tools. Check your internet connection and try again.' $tag; exit 1 }
+    Show-ProgressToast $tag 'ClipToast Setup' 'Configuring media tools (happens once)...' 'indeterminate' 'Starting' 'Connecting to downloads...'
+    & (Join-Path $PSScriptRoot 'install-tools.ps1') -Tag $tag
+    if (-not (Test-Tools)) {
+        Show-Toast 'Setup failed' 'Could not download required media tools. Check your internet connection or open Settings to retry.' $tag
+        exit 1
+    }
+    # Refresh tool paths and environment after tool installation
+    $yt      = Join-Path $Bin 'yt-dlp.exe'
+    $ffmpeg  = Join-Path $Bin 'ffmpeg.exe'
+    $ffprobe = Join-Path $Bin 'ffprobe.exe'
+    $env:Path = "$Bin;$env:Path"
 }
 
 # ---------- 1. self-update (small, signed package; checked at most every 6 hours) ----------
@@ -40,7 +65,7 @@ if (-not $NoUpdateCheck -and $cfg['AutoUpdate'] -ne '0') {
         $reArgs = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
             '-File', ('"{0}"' -f (Join-Path $AppDir 'downloader.ps1')), '-NoUpdateCheck')
         if ($AudioOnly) { $reArgs += '-AudioOnly' }
-        if ($InputUrl)  { $reArgs += @('-InputUrl', ('"{0}"' -f $InputUrl)) }
+        if ($url)       { $reArgs += @('-InputUrl', ('"{0}"' -f $url)) }
         Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $reArgs
         exit 0
     }
@@ -56,22 +81,18 @@ if (((Get-UnixNow) - $lastY) -gt 259200) {
     Write-Config $cfg
 }
 
-# ---------- 3. read the link ----------
-$url = ''
-if ($InputUrl) {
-    $m = [regex]::Match([string]$InputUrl, 'https?://[^\s"<>]+')
-    if ($m.Success) { $url = $m.Value }
-}
+# ---------- 3. validate link ----------
 if (-not $url) {
     $clip = Get-Clipboard -Raw
     $m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
-    if ($m.Success) { $url = $m.Value }
+    if ($m.Success) {
+        $url = $m.Value.TrimEnd('.', ',', ')', ']', ';', "'", '"')
+    }
 }
 if (-not $url) {
     Show-Toast 'ClipToast' 'No link found in clipboard. Copy a YouTube, Instagram, or media link first, then try again.' $tag
     exit 1
 }
-$url = $url.TrimEnd('.', ',', ')', ']', ';', "'", '"')
 Write-Log "START url=$url AudioOnly=$AudioOnly"
 
 # Prevent duplicate concurrent downloads of the exact same URL within 4 seconds

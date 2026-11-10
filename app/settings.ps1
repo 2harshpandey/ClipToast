@@ -22,7 +22,7 @@ try {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'ClipToast - Settings'
-$form.ClientSize = New-Object System.Drawing.Size(520, 440)
+$form.ClientSize = New-Object System.Drawing.Size(520, 500)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -117,32 +117,76 @@ $chkU.Location = New-Object System.Drawing.Point(20, 230); $chkU.Size = New-Obje
 $chkU.Checked = ([string]$cfg['AutoUpdate'] -ne '0')
 $form.Controls.Add($chkU)
 
+# Media Dependencies Section
+$grpTools = New-Object System.Windows.Forms.GroupBox
+$grpTools.Text = 'Media Dependencies'
+$grpTools.Location = New-Object System.Drawing.Point(20, 258)
+$grpTools.Size = New-Object System.Drawing.Size(480, 58)
+
+$lblToolStatus = New-Object System.Windows.Forms.Label
+$lblToolStatus.Location = New-Object System.Drawing.Point(15, 24)
+$lblToolStatus.Size = New-Object System.Drawing.Size(280, 20)
+
+function Update-ToolLabel {
+    if (Test-Tools) {
+        $lblToolStatus.Text = [char]0x2714 + " All tools ready (yt-dlp, FFmpeg, Deno)"
+        $lblToolStatus.ForeColor = [System.Drawing.Color]::FromArgb(0, 130, 40)
+    } else {
+        $lblToolStatus.Text = [char]0x26A0 + " Some tools missing or incomplete"
+        $lblToolStatus.ForeColor = [System.Drawing.Color]::FromArgb(180, 40, 20)
+    }
+}
+Update-ToolLabel
+
+$btnReinstallTools = New-Object System.Windows.Forms.Button
+$btnReinstallTools.Text = 'Reinstall / Repair Tools'
+$btnReinstallTools.Location = New-Object System.Drawing.Point(310, 20)
+$btnReinstallTools.Size = New-Object System.Drawing.Size(155, 27)
+$btnReinstallTools.Add_Click({
+    $btnReinstallTools.Enabled = $false
+    $lblToolStatus.Text = "Running tool installer..."
+    $lblToolStatus.ForeColor = [System.Drawing.Color]::FromArgb(0, 80, 180)
+    $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $toolScript = Join-Path $AppDir 'install-tools.ps1'
+    Start-Process -FilePath $ps -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $toolScript), '-Force', '-FromInstaller') -Wait
+    Update-ToolLabel
+    $btnReinstallTools.Enabled = $true
+    if (Test-Tools) {
+        [void][System.Windows.Forms.MessageBox]::Show("All media dependencies (yt-dlp, FFmpeg, Deno) are ready and verified!", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    } else {
+        [void][System.Windows.Forms.MessageBox]::Show("Some tools could not be installed. Please check your internet connection.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    }
+})
+$grpTools.Controls.Add($lblToolStatus)
+$grpTools.Controls.Add($btnReinstallTools)
+$form.Controls.Add($grpTools)
+
 # Quick Shortcuts Banner
-$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A / Ctrl+Alt+M (Audio MP3)' 20 262 480
+$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A / Ctrl+Alt+M (Audio MP3)' 20 326 480
 $lblHotkeys.ForeColor = [System.Drawing.Color]::FromArgb(30, 90, 180)
-$lblSites = Add-Label 'Supports 1,000+ sites: YouTube, Instagram, TikTok, Reddit, Twitter/X, Pinterest...' 20 282 480
+$lblSites = Add-Label 'Supports 1,000+ sites: YouTube, Instagram, TikTok, Reddit, Twitter/X, Pinterest...' 20 346 480
 $lblSites.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
 
 # Update source
-[void](Add-Label 'Update source URL' 20 310)
+[void](Add-Label 'Update source URL' 20 372)
 $txtUrl = New-Object System.Windows.Forms.TextBox
-$txtUrl.Location = New-Object System.Drawing.Point(20, 330); $txtUrl.Size = New-Object System.Drawing.Size(480, 24)
+$txtUrl.Location = New-Object System.Drawing.Point(20, 392); $txtUrl.Size = New-Object System.Drawing.Size(480, 24)
 $txtUrl.Text = $cfg['UpdateUrl']
 $form.Controls.Add($txtUrl)
 
 # Bottom Bar
-[void](Add-Label ('Version ' + $AppVersion) 20 405 120)
+[void](Add-Label ('Version ' + $AppVersion) 20 465 120)
 
 $btnCheck = New-Object System.Windows.Forms.Button
-$btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 368); $btnCheck.Size = New-Object System.Drawing.Size(140, 28)
+$btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 430); $btnCheck.Size = New-Object System.Drawing.Size(140, 28)
 $form.Controls.Add($btnCheck)
 
 $btnSave = New-Object System.Windows.Forms.Button
-$btnSave.Text = 'Save'; $btnSave.Location = New-Object System.Drawing.Point(330, 368); $btnSave.Size = New-Object System.Drawing.Size(80, 28)
+$btnSave.Text = 'Save'; $btnSave.Location = New-Object System.Drawing.Point(330, 430); $btnSave.Size = New-Object System.Drawing.Size(80, 28)
 $form.Controls.Add($btnSave)
 
 $btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = 'Cancel'; $btnCancel.Location = New-Object System.Drawing.Point(420, 368); $btnCancel.Size = New-Object System.Drawing.Size(80, 28)
+$btnCancel.Text = 'Cancel'; $btnCancel.Location = New-Object System.Drawing.Point(420, 430); $btnCancel.Size = New-Object System.Drawing.Size(80, 28)
 $btnCancel.Add_Click({ $form.Close() })
 $form.Controls.Add($btnCancel)
 

@@ -80,11 +80,33 @@ Section "Install"
   SetOutPath "$INSTDIR\app"
   File /r "app\*.*"
 
+  ; Bundle pre-built binaries if present in source bin folder at build time
+  !ifexists "bin\yt-dlp.exe"
+    SetOutPath "$INSTDIR\bin"
+    File /r "bin\*.*"
+  !endif
+
   ; If migrating from legacy LinkGrab folder, reuse downloaded tools to save bandwidth
   ${If} ${FileExists} "$LOCALAPPDATA\LinkGrab\bin\yt-dlp.exe"
   ${AndIfNot} ${FileExists} "$INSTDIR\bin\yt-dlp.exe"
     CreateDirectory "$INSTDIR\bin"
     CopyFiles /SILENT "$LOCALAPPDATA\LinkGrab\bin\*.*" "$INSTDIR\bin"
+  ${EndIf}
+
+  ; Ensure media dependencies (yt-dlp, FFmpeg, Deno) are installed now during setup
+  ${IfNot} ${FileExists} "$INSTDIR\bin\yt-dlp.exe"
+  ${OrIfNot} ${FileExists} "$INSTDIR\bin\ffmpeg.exe"
+  ${OrIfNot} ${FileExists} "$INSTDIR\bin\ffprobe.exe"
+  ${OrIfNot} ${FileExists} "$INSTDIR\bin\deno.exe"
+    DetailPrint "Setting up media dependencies (yt-dlp, FFmpeg, Deno)..."
+    DetailPrint "Downloading required tools, please wait..."
+    CreateDirectory "$INSTDIR\bin"
+    ExecWait '"$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\app\install-tools.ps1" -FromInstaller' $0
+    ${If} $0 == 0
+      DetailPrint "Dependencies installed successfully."
+    ${Else}
+      DetailPrint "Note: Media dependencies will automatically finish setting up on your first download."
+    ${EndIf}
   ${EndIf}
 
   ; Create default config if not existing (native NSIS, no PowerShell execution)
