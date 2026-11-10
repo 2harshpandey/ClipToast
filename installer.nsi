@@ -14,6 +14,9 @@ Unicode true
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+
+!insertmacro GetFileName
 
 Name "${APP_NAME}"
 !ifndef OUT_FILE
@@ -46,10 +49,21 @@ Var DownloadDir
 !define MUI_WELCOMEPAGE_TEXT "A modern, zero-friction clipboard media downloader for Windows 11 and 10.$\r$\n$\r$\nSimply copy any media link and trigger your download:$\r$\n$\r$\n  Ctrl + Alt + G$\r$\n    Download highest quality WhatsApp-ready MP4$\r$\n$\r$\n  Ctrl + Alt + A  (or Ctrl + Alt + M)$\r$\n    Extract clean 320kbps MP3 audio with cover art$\r$\n$\r$\n  System Tray Icon$\r$\n    1-click downloads && settings near your taskbar clock$\r$\n$\r$\nFast, lightweight, and installs without administrator privileges."
 !insertmacro MUI_PAGE_WELCOME
 
-!define MUI_PAGE_CUSTOMFUNCTION_PRE DirPre
-!define MUI_PAGE_HEADER_TEXT "Choose your download folder"
+; 1. Installation Destination Page (where program files reside)
+!define MUI_PAGE_CUSTOMFUNCTION_PRE InstDirPre
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE InstDirLeave
+!define MUI_PAGE_HEADER_TEXT "Choose Installation Location"
+!define MUI_PAGE_HEADER_SUBTEXT "Where should ${APP_NAME} be installed?"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Setup will install ${APP_NAME} in the following folder. A 'ClipToast' subfolder is automatically created to keep all application files organized."
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Installation folder"
+!insertmacro MUI_PAGE_DIRECTORY
+
+; 2. Media Download Directory Page (where downloaded videos & music are saved)
+!define MUI_PAGE_CUSTOMFUNCTION_PRE DownloadDirPre
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DownloadDirLeave
+!define MUI_PAGE_HEADER_TEXT "Choose Media Download Folder"
 !define MUI_PAGE_HEADER_SUBTEXT "Where should downloaded media be saved?"
-!define MUI_DIRECTORYPAGE_TEXT_TOP "Downloaded media will be saved in this folder. Click Browse to choose a different one (you can change it later in Settings)."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Downloaded media will be saved in this folder. A 'ClipToast Downloads' subfolder is automatically created to keep your downloads organized (you can also change it later in Settings)."
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Download folder"
 !define MUI_DIRECTORYPAGE_VARIABLE $DownloadDir
 !insertmacro MUI_PAGE_DIRECTORY
@@ -65,13 +79,77 @@ Var DownloadDir
 !insertmacro MUI_LANGUAGE "English"
 
 Function .onInit
-  StrCpy $DownloadDir "$PROFILE\Downloads\ClipToast"
+  StrCpy $DownloadDir "$PROFILE\Downloads\ClipToast Downloads"
 FunctionEnd
 
-; Skip folder prompt when upgrading existing install
-Function DirPre
+; Helper function: Guarantees the selected installation path ends with \ClipToast
+Function EnsureClipToastFolder
+  Exch $0 ; input path
+  Push $1
+  Push $2
+
+  ; Strip trailing backslash if present
+  StrCpy $1 "$0" "" -1
+  ${If} $1 == "\"
+    StrCpy $0 "$0" -1
+  ${EndIf}
+
+  ; Check the leaf folder name
+  ${GetFileName} "$0" $2
+  ${If} $2 != "${APP_NAME}"
+    StrCpy $0 "$0\${APP_NAME}"
+  ${EndIf}
+
+  Pop $2
+  Pop $1
+  Exch $0 ; output path with \ClipToast guaranteed
+FunctionEnd
+
+; Helper function: Guarantees the selected download path ends with \ClipToast Downloads
+Function EnsureDownloadFolder
+  Exch $0 ; input path
+  Push $1
+  Push $2
+
+  ; Strip trailing backslash if present
+  StrCpy $1 "$0" "" -1
+  ${If} $1 == "\"
+    StrCpy $0 "$0" -1
+  ${EndIf}
+
+  ; Check the leaf folder name
+  ${GetFileName} "$0" $2
+  ${If} $2 != "ClipToast Downloads"
+  ${AndIf} $2 != "${APP_NAME}"
+    StrCpy $0 "$0\ClipToast Downloads"
+  ${EndIf}
+
+  Pop $2
+  Pop $1
+  Exch $0 ; output path with \ClipToast Downloads guaranteed
+FunctionEnd
+
+; Skip folder prompts when upgrading existing install
+Function InstDirPre
   IfFileExists "$INSTDIR\config.txt" 0 +2
   Abort
+FunctionEnd
+
+Function InstDirLeave
+  Push "$INSTDIR"
+  Call EnsureClipToastFolder
+  Pop "$INSTDIR"
+FunctionEnd
+
+Function DownloadDirPre
+  IfFileExists "$INSTDIR\config.txt" 0 +2
+  Abort
+FunctionEnd
+
+Function DownloadDirLeave
+  Push "$DownloadDir"
+  Call EnsureDownloadFolder
+  Pop "$DownloadDir"
 FunctionEnd
 
 Section "Install"

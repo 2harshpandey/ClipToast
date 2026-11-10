@@ -1,4 +1,4 @@
-# common.ps1 - shared helpers, dot-sourced by the other scripts
+﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $InstallDir = $Root
@@ -183,7 +183,7 @@ function Clear-ClipToastOrphans {
 # ---------------- config (simple key=value file) ----------------
 function Read-Config {
     $cfg = @{
-        DownloadDir      = (Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast')
+        DownloadDir      = (Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast Downloads')
         MaxHeight        = '0'
         CookiesBrowser   = ''
         AutoUpdate       = '1'
@@ -380,7 +380,7 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
         $cancelUri = "cliptoast:cancel:$Tag"
         $c = Read-Config
         $dPath = [string]$c['DownloadDir']
-        if (-not $dPath) { $dPath = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
+        if (-not $dPath) { $dPath = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast Downloads' }
         if (-not (Test-Path -LiteralPath $dPath)) { try { New-Item -ItemType Directory -Force -Path $dPath | Out-Null } catch {} }
         $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
         $xml = @"

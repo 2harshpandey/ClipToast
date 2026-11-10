@@ -188,7 +188,7 @@ $itemFolder.Add_Click({
     try {
         $cfg = Read-Config
         $dir = [string]$cfg['DownloadDir']
-        if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast' }
+        if (-not $dir) { $dir = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast Downloads' }
         if (-not (Test-Path -LiteralPath $dir)) {
             try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {}
         }
