@@ -81,7 +81,14 @@ function Download-File([string]$Url, [string]$Dest, [string]$Label) {
     # Strategy 1: curl.exe (standard in Windows 10/11, highly resilient with redirects and large files)
     if ($curl) {
         try {
-            $curlArgs = @('-L', '--fail', '--retry', '3', '--retry-delay', '2', '--connect-timeout', '30', '--max-time', '600', '-o', $Dest, $Url)
+            $curlArgs = @(
+                '-L', '--fail', '-4',
+                '--retry', '2', '--retry-delay', '1',
+                '--connect-timeout', '15',
+                '--speed-time', '10', '--speed-limit', '50000',
+                '--max-time', '400',
+                '-o', $Dest, $Url
+            )
             if ($FromInstaller) {
                 $curlArgs = @('-#') + $curlArgs
             } else {
@@ -95,6 +102,10 @@ function Download-File([string]$Url, [string]$Dest, [string]$Label) {
             }
         } catch {
             $errList.Add("curl exception: $_")
+        } finally {
+            if (-not $success -and (Test-Path -LiteralPath $Dest)) {
+                Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 
@@ -202,9 +213,10 @@ try {
         Report-Status "Step 2 of 3: FFmpeg" "Downloading FFmpeg & ffprobe (~85 MB)..." 0.50 "Downloading audio/video converter..."
         $ffZip = Join-Path $tmp 'ffmpeg.zip'
         $ffMirrors = @(
-            'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
             'https://github.com/GyanD/codexffmpeg/releases/latest/download/ffmpeg-release-essentials.zip',
-            'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip'
+            'https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+            'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+            'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
         )
         $ffSuccess = $false
         foreach ($mirror in $ffMirrors) {

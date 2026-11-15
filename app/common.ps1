@@ -1,4 +1,4 @@
-﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
+# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $InstallDir = $Root

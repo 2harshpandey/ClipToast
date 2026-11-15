@@ -7,6 +7,7 @@ PRIVATE-update-signing-key.xml
 # Binaries and Compiled Installers
 *.exe
 *.msi
+*.wsb
 bin/
 release/
 
