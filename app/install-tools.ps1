@@ -205,17 +205,16 @@ try {
         Move-Item -LiteralPath $ytTmp -Destination $ytTarget -Force
     }
 
-    # 2. FFmpeg & ffprobe (~85 MB)
+    # 2. FFmpeg & ffprobe
     $ffTarget = Join-Path $Bin 'ffmpeg.exe'
     $probeTarget = Join-Path $Bin 'ffprobe.exe'
     if ($Force -or -not (Test-Path -LiteralPath $ffTarget) -or -not (Test-Path -LiteralPath $probeTarget) -or
         ((Get-Item -LiteralPath $ffTarget).Length -lt 10000) -or ((Get-Item -LiteralPath $probeTarget).Length -lt 10000)) {
-        Report-Status "Step 2 of 3: FFmpeg" "Downloading FFmpeg & ffprobe (~85 MB)..." 0.50 "Downloading audio/video converter..."
+        Report-Status "Step 2 of 3: FFmpeg" "Downloading FFmpeg & ffprobe..." 0.50 "Downloading audio/video converter..."
         $ffZip = Join-Path $tmp 'ffmpeg.zip'
         $ffMirrors = @(
-            'https://github.com/GyanD/codexffmpeg/releases/latest/download/ffmpeg-release-essentials.zip',
             'https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
-            'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+            'https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
             'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
         )
         $ffSuccess = $false
