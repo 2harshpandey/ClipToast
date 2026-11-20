@@ -57,28 +57,33 @@ if (-not (Test-Tools)) {
     $env:Path = "$Bin;$env:Path"
 }
 
-# ---------- 1. self-update (small, signed package; checked at most every 6 hours) ----------
-if (-not $NoUpdateCheck -and $cfg['AutoUpdate'] -ne '0') {
-    $u = Invoke-AppUpdate
-    if ($u.Status -eq 'updated') {
-        Show-Toast ('ClipToast updated to ' + $u.Version) ([string]$u.Notes) 'ctupdate'
-        $reArgs = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-            '-File', ('"{0}"' -f (Join-Path $AppDir 'downloader.ps1')), '-NoUpdateCheck')
-        if ($AudioOnly) { $reArgs += '-AudioOnly' }
-        if ($url)       { $reArgs += @('-InputUrl', ('"{0}"' -f $url)) }
-        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $reArgs
-        exit 0
-    }
-}
+# ---------- 1. periodic updates (dispatched in background so active download never waits) ----------
+$nowUnix = Get-UnixNow
+$lastAppCheck   = [int64]0
+$lastYtdlpCheck = [int64]0
+[void][int64]::TryParse([string]$cfg['LastUpdateCheck'], [ref]$lastAppCheck)
+[void][int64]::TryParse([string]$cfg['LastYtdlpUpdate'], [ref]$lastYtdlpCheck)
 
-# ---------- 2. keep yt-dlp fresh (sites change often) ----------
-$cfg = Read-Config
-$lastY = [int64]0
-[void][int64]::TryParse([string]$cfg['LastYtdlpUpdate'], [ref]$lastY)
-if (((Get-UnixNow) - $lastY) -gt 259200) {
-    try { & $yt -U 2>&1 | Out-Null } catch {}
-    $cfg['LastYtdlpUpdate'] = [string](Get-UnixNow)
+$needsAppCheck   = (-not $NoUpdateCheck -and $cfg['AutoUpdate'] -ne '0' -and ($nowUnix - $lastAppCheck) -gt 21600)
+$needsYtdlpCheck = (($nowUnix - $lastYtdlpCheck) -gt 259200)
+
+if ($needsAppCheck -or $needsYtdlpCheck) {
+    if ($needsAppCheck)   { $cfg['LastUpdateCheck'] = [string]$nowUnix }
+    if ($needsYtdlpCheck) { $cfg['LastYtdlpUpdate'] = [string]$nowUnix }
     Write-Config $cfg
+
+    $bgCmds = New-Object System.Collections.Generic.List[string]
+    if ($needsAppCheck) {
+        $bgCmds.Add(". (Join-Path '$AppDir' 'common.ps1'); [void](Invoke-AppUpdate)")
+    }
+    if ($needsYtdlpCheck) {
+        $bgCmds.Add("try { & '$yt' -U 2>&1 | Out-Null } catch {}")
+    }
+    try {
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ($bgCmds -join '; ')
+        )
+    } catch {}
 }
 
 # ---------- 3. validate link ----------
@@ -703,9 +708,31 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     $outFile = Join-Path $Out  ("out$n.mp4")
     Move-Item -LiteralPath $f.FullName -Destination $inFile
 
-    $vcodec = Get-Probe $inFile 'v:0' 'codec_name'
-    $pix    = Get-Probe $inFile 'v:0' 'pix_fmt'
-    $acodec = Get-Probe $inFile 'a:0' 'codec_name'
+    $vcodec = $null
+    $pix    = $null
+    $acodec = $null
+    $dur    = [double]0
+    try {
+        $jsonStr = & $ffprobe -v error -show_entries stream=codec_type,codec_name,pix_fmt -show_entries format=duration -of json $inFile 2>&1
+        $probe = $jsonStr | ConvertFrom-Json
+        $vStream = ($probe.streams | Where-Object { $_.codec_type -eq 'video' } | Select-Object -First 1)
+        $aStream = ($probe.streams | Where-Object { $_.codec_type -eq 'audio' } | Select-Object -First 1)
+        if ($vStream) {
+            $vcodec = $vStream.codec_name
+            $pix    = $vStream.pix_fmt
+        }
+        if ($aStream) {
+            $acodec = $aStream.codec_name
+        }
+        if ($probe.format -and $probe.format.duration) {
+            $dur = ConvertTo-Num ([string]$probe.format.duration)
+        }
+    } catch {
+        $vcodec = Get-Probe $inFile 'v:0' 'codec_name'
+        $pix    = Get-Probe $inFile 'v:0' 'pix_fmt'
+        $acodec = Get-Probe $inFile 'a:0' 'codec_name'
+        $dur    = ConvertTo-Num ([string](& $ffprobe -v error -show_entries format=duration -of 'default=nw=1:nk=1' $inFile | Select-Object -First 1))
+    }
     if (-not $vcodec) { $saved += (Move-Unique $inFile ($f.BaseName + $ext)); continue }   # audio-only: keep as is
 
     $transcode = $false
@@ -719,7 +746,6 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
     elseif ($acodec -eq 'aac') { $aArgs = @('-c:a', 'copy') }
     else                       { $aArgs = @('-c:a', 'aac', '-b:a', '192k', '-ac', '2') }
 
-    $dur = ConvertTo-Num ([string](& $ffprobe -v error -show_entries format=duration -of 'default=nw=1:nk=1' $inFile | Select-Object -First 1))
     $ff = @('-y', '-v', 'error', '-nostats', '-threads', '0', '-progress', 'pipe:1', '-i', $inFile, '-map', '0:v:0', '-map', '0:a:0?') + $vArgs + $aArgs + @('-movflags', '+faststart', $outFile)
 
     $head = if ($transcode) { 'Converting Video' } elseif ($acodec -ne 'aac' -and $acodec) { 'Optimizing Audio' } else { 'Finalizing MP4' }
