@@ -2,7 +2,7 @@
 
 [![Windows 11](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white)](https://github.com/2harshpandey/ClipToast)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version 1.1.1](https://img.shields.io/badge/Version-1.1.1-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
+[![Version 1.1.2](https://img.shields.io/badge/Version-1.1.2-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/2harshpandey/ClipToast?style=flat&logo=github)](https://github.com/2harshpandey/ClipToast/stargazers)
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-ClipToast-0078D6?logo=alternativeto&logoColor=white)](https://alternativeto.net/software/cliptoast/)
 [![Powered by yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red.svg)](https://github.com/yt-dlp/yt-dlp)
@@ -33,6 +33,7 @@ ClipToast is a media downloader for Windows 10 and 11. Copy any video or music l
 - **Error Diagnostics**: When an unhandled error occurs, the notification provides a report button that opens a prefilled GitHub issue with sanitized diagnostic details and no private data.
 - **Tray Auto-Restore**: If you close the tray process, it reopens automatically when you trigger your next download shortcut, or you can start it from the settings window.
 - **Universal MP4 Compatibility**: Videos are converted to H.264 video with AAC audio and faststart flags so they play across WhatsApp, web browsers, mobile phones, and TV players without codec errors.
+- **Instagram Photo & Audio Posts**: Handles Instagram photo posts and multi-slide carousels gracefully. When attached background music is available, ClipToast automatically uses FFmpeg to synthesize the photo and audio into a WhatsApp-compatible MP4 video (or extracts the 320kbps MP3). If Instagram restricts the audio stream to its mobile app, the high-resolution photo is saved directly without failing.
 - **SDR Color Preservation**: Prefers SDR formats over raw HDR to prevent washed out colors on standard computer displays.
 - **Per-User Setup**: Installs under local user application data without requiring administrator privileges or User Account Control prompts.
 - **Signed Auto-Updates**: Checks for updates from GitHub releases using RSA signature verification to ensure packages are authentic.
@@ -47,7 +48,7 @@ ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engi
 | Platform | Capabilities |
 | :--- | :--- |
 | **YouTube** | Up to 8K resolution, Shorts, YouTube Music, and srt captions |
-| **Instagram** | High resolution Reels, video posts, and carousel items |
+| **Instagram** | High resolution Reels, video posts, carousels, and photo posts with music synthesis |
 | **TikTok** | Direct video downloads without watermarks |
 | **Reddit** | Merges separated video and audio tracks into a unified MP4 file |
 | **Twitter and X** | Direct extraction of video clips and embedded animations |
@@ -62,7 +63,7 @@ ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engi
 ### Installer Setup
 
 1. Open the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
-2. Download [ClipToastSetup-v1.1.1.exe](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToastSetup-v1.1.1.exe).
+2. Download [ClipToastSetup-v1.1.2.exe](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToastSetup-v1.1.2.exe).
 3. Run the installer. No administrator rights are needed.
 4. Select your preferred download directory.
 5. ClipToast sets up required tools and places an icon in your notification area.
@@ -73,7 +74,7 @@ If Windows SmartScreen shows a warning on first run because the project is indep
 
 If you prefer to run ClipToast without installing:
 
-1. Download [ClipToast-v1.1.1-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.1-portable.zip) from the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
+1. Download [ClipToast-v1.1.2-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.2-portable.zip) from the [Releases](https://github.com/2harshpandey/ClipToast/releases) page.
 2. Extract the archive into a folder of your choice.
 3. Run `ClipToast.exe` directly.
 

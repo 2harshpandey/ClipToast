@@ -286,6 +286,129 @@ function Invoke-Yt {
 
 Invoke-Yt
 
+# Fallback: Instagram photo posts & carousels (with optional attached audio track)
+function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [string]$DestDir, [bool]$AudioOnly) {
+    Write-Log "Attempting Instagram Photo/Carousel Fallback for: $PostUrl"
+    Update-ProgressToast $tag 'Instagram Media' (Limit-Text $PostUrl 60) 'indeterminate' 'Extracting' 'Retrieving Instagram photo and audio streams...'
+
+    $shortcode = ''
+    if ($PostUrl -match 'instagram\.com/(?:p|reel|tv)/([^/?#&]+)') {
+        $shortcode = $matches[1]
+    }
+    if (-not $shortcode) { return $false }
+
+    $dumpDir = Join-Path $WorkDir ('ig_' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+    New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+    
+    $prevPwd = Get-Location
+    Set-Location $dumpDir
+    try {
+        & $yt --no-warnings --write-pages $PostUrl 2>&1 | Out-Null
+    } finally {
+        Set-Location $prevPwd
+    }
+
+    $dumpFile = Get-ChildItem -Path $dumpDir -Filter "*graphql*.dump" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $dumpFile) {
+        Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+
+    $media = $null
+    try {
+        $json = (Get-Content -LiteralPath $dumpFile.FullName -Raw -Encoding UTF8) | ConvertFrom-Json
+        $media = $json.data.xig_polaris_media.if_not_gated_logged_out
+    } catch {
+        Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $media) { return $false }
+
+    $caption = ''
+    if ($media.caption -and $media.caption.text) {
+        $caption = $media.caption.text
+    }
+    $cleanTitle = if ($caption) { ($caption -split "`n")[0] } else { "Instagram_$shortcode" }
+    $cleanTitle = ($cleanTitle -replace '[\\/:*?"<>|]', '_').Trim()
+    if ($cleanTitle.Length -gt 70) { $cleanTitle = $cleanTitle.Substring(0, 70).Trim() }
+    if (-not $cleanTitle) { $cleanTitle = "Instagram_$shortcode" }
+    $script:vTitle = $cleanTitle
+
+    # Collect all image URLs (single photo and multi-image carousels)
+    $images = New-Object System.Collections.Generic.List[string]
+    if ($media.carousel_media) {
+        foreach ($item in $media.carousel_media) {
+            if ($item.image_versions2 -and $item.image_versions2.candidates) {
+                $images.Add($item.image_versions2.candidates[0].url)
+            } elseif ($item.display_uri) {
+                $images.Add($item.display_uri)
+            }
+        }
+    }
+    if ($images.Count -eq 0) {
+        if ($media.image_versions2 -and $media.image_versions2.candidates) {
+            $images.Add($media.image_versions2.candidates[0].url)
+        } elseif ($media.display_uri) {
+            $images.Add($media.display_uri)
+        }
+    }
+    if ($images.Count -eq 0) { return $false }
+
+    # Download high-resolution images
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    $idx = 0
+    $downloadedImages = New-Object System.Collections.Generic.List[string]
+    foreach ($imgUrl in $images) {
+        $idx++
+        $imgName = if ($images.Count -eq 1) { "$cleanTitle.jpg" } else { "$cleanTitle ($idx).jpg" }
+        $imgPath = Join-Path $WorkDir $imgName
+        if ($curl) {
+            & $curl.Source -s -L -o $imgPath $imgUrl
+        } else {
+            (New-Object System.Net.WebClient).DownloadFile($imgUrl, $imgPath)
+        }
+        if ((Test-Path -LiteralPath $imgPath) -and ((Get-Item -LiteralPath $imgPath).Length -gt 1000)) {
+            $downloadedImages.Add($imgPath)
+        }
+    }
+    if ($downloadedImages.Count -eq 0) { return $false }
+
+    # Check for attached audio track stream
+    $audioUrl = $null
+    if ($media.clips_metadata -and $media.clips_metadata.music_info -and $media.clips_metadata.music_info.music_asset_info.progressive_download_url) {
+        $audioUrl = $media.clips_metadata.music_info.music_asset_info.progressive_download_url
+    } elseif ($media.clips_metadata -and $media.clips_metadata.original_sound_info -and $media.clips_metadata.original_sound_info.progressive_download_url) {
+        $audioUrl = $media.clips_metadata.original_sound_info.progressive_download_url
+    }
+
+    if ($audioUrl) {
+        Update-ProgressToast $tag 'Processing Audio' $cleanTitle 'indeterminate' 'Audio' 'Merging attached audio track...'
+        $audioFile = Join-Path $WorkDir 'audio.m4a'
+        if ($curl) {
+            & $curl.Source -s -L -o $audioFile $audioUrl
+        } else {
+            (New-Object System.Net.WebClient).DownloadFile($audioUrl, $audioFile)
+        }
+
+        if ((Test-Path -LiteralPath $audioFile) -and ((Get-Item -LiteralPath $audioFile).Length -gt 1000)) {
+            if ($AudioOnly) {
+                $mp3File = Join-Path $WorkDir "$cleanTitle.mp3"
+                & $ffmpeg -y -i $audioFile -i $downloadedImages[0] -map 0:a -map 1:v -c:a libmp3lame -b:a 320k -c:v copy -id3v2_version 3 -metadata "title=$cleanTitle" $mp3File 2>&1 | Out-Null
+                Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
+            } else {
+                $mp4File = Join-Path $WorkDir "$cleanTitle.mp4"
+                & $ffmpeg -y -loop 1 -i $downloadedImages[0] -i $audioFile -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest $mp4File 2>&1 | Out-Null
+                Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } else {
+        Write-Log "Instagram photo has no web audio stream (mobile app only). Saved high-res photo."
+    }
+
+    return $true
+}
+
 # Subtitle recovery: If subtitle rate limit (429) or failure occurred, don't kill the video download!
 if ($script:ytCode -ne 0) {
     $isSubError = ($script:ytLines | Where-Object { $_ -match 'Unable to download video subtitles|subtitles.*HTTP Error 429|subtitles.*429|subtitles for' })
@@ -313,10 +436,28 @@ if ($script:ytCode -ne 0) {
 }
 
 if ($script:ytCode -ne 0) {
+    # Check if this is an Instagram photo or carousel post
+    $isInstaNoVideo = ($script:ytLines | Where-Object { $_ -match 'There is no video in this post|no video formats' })
+    if ($isInstaNoVideo -and ($url -match 'instagram\.com/(?:p|reel|tv)/([^/?#&]+)')) {
+        if (Invoke-InstagramPhotoFallback $url $Work $dest $AudioOnly) {
+            $script:ytCode = 0
+        }
+    }
+}
+
+if ($script:ytCode -ne 0) {
     Write-Log 'First attempt failed - updating yt-dlp and retrying'
     Update-ProgressToast $tag 'Retrying...' $script:vTitle 'indeterminate' '' 'Updating the downloader engine'
     try { & $yt -U 2>&1 | Out-Null } catch {}
     Invoke-Yt
+    if ($script:ytCode -ne 0) {
+        $isInstaNoVideo = ($script:ytLines | Where-Object { $_ -match 'There is no video in this post|no video formats' })
+        if ($isInstaNoVideo -and ($url -match 'instagram\.com/(?:p|reel|tv)/([^/?#&]+)')) {
+            if (Invoke-InstagramPhotoFallback $url $Work $dest $AudioOnly) {
+                $script:ytCode = 0
+            }
+        }
+    }
 }
 Write-Log ($script:ytLines -join "`n")
 if ($script:ytCode -ne 0) {
@@ -413,8 +554,19 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
         continue
     }
 
+    # High-resolution photo posts (standalone or carousels)
+    if ($ext -in '.jpg', '.jpeg', '.png', '.webp') {
+        $hasVideoOrAudio = (Get-ChildItem -LiteralPath $Work -File | Where-Object { $_.Extension.ToLower() -in '.mp4', '.mkv', '.webm', '.mov', '.mp3' })
+        if (-not $hasVideoOrAudio) {
+            $saved += (Move-Unique $f.FullName ($cleanBase + $ext))
+            continue
+        } else {
+            continue
+        }
+    }
+
     # Intermediate images or temp files: skip
-    if ($ext -in '.jpg', '.jpeg', '.png', '.gif', '.webp', '.part', '.temp', '.ytdl') {
+    if ($ext -in '.gif', '.part', '.temp', '.ytdl') {
         continue
     }
 
@@ -478,13 +630,25 @@ if ($saved.Count -eq 0) {
 } elseif ($saved.Count -eq 1) {
     $mainFile = $saved[0]
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
-    $title = if ($AudioOnly -or $mainFile -match '\.(mp3|m4a|aac|opus|flac|wav)$') { 'Audio downloaded' } else { 'Download complete' }
+    $title = if ($AudioOnly -or $mainFile -match '\.(mp3|m4a|aac|opus|flac|wav)$') {
+        'Audio downloaded'
+    } elseif ($mainFile -match '\.(jpg|jpeg|png|webp)$') {
+        'Photo downloaded'
+    } else {
+        'Download complete'
+    }
     $subNote = if ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly -and -not $mainFile.EndsWith('.srt')) { " (Subtitles not available for this video)" } else { '' }
     Show-Toast $title ("{0}  ({1}){2}" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $size, $subNote) $tag $dest $mainFile
 } else {
     $mainFile = ($saved | Where-Object { $_ -match '\.(mp4|mp3|mkv)$' } | Select-Object -First 1)
     if (-not $mainFile) { $mainFile = $saved[0] }
-    $title = if ($AudioOnly) { 'Audio downloaded' } else { 'Download complete' }
+    $title = if ($AudioOnly) {
+        'Audio downloaded'
+    } elseif ($mainFile -match '\.(jpg|jpeg|png|webp)$') {
+        'Photo downloaded'
+    } else {
+        'Download complete'
+    }
     $hasSubs = ($saved | Where-Object { $_ -match '\.(srt|vtt)$' }).Count -gt 0
     $subLabel = if ($hasSubs) { ' (+ subtitles)' } elseif ($cfg['DownloadSubs'] -eq '1' -and -not $AudioOnly) { ' (Subtitles not available)' } else { '' }
     $size = Format-Size ((Get-Item -LiteralPath $mainFile).Length)
