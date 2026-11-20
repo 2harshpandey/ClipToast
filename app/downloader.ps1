@@ -166,22 +166,22 @@ if ($AudioOnly) {
     } else {
         $sortList.Add('res')
     }
-    $sortList.Add('fps')
     $sortList.Add('vcodec:h264')
+    $sortList.Add('acodec:m4a')
+    $sortList.Add('ext:mp4:m4a')
+    $sortList.Add('fps')
     $sortList.Add('abr')
     $sortStr = $sortList -join ','
 
-    # Prefer SDR (HDR -> SDR conversion looks washed out), then anything.
-    # We use format sorting (-S res:...) to cap resolution by the shortest edge.
-    # This properly handles both landscape (1920x1080) and vertical videos (1080x1920 Instagram Reels/Shorts/TikTok)
-    # without failing with "Requested format is not available".
-    $fmt = 'bv*[dynamic_range=SDR]+ba/b[dynamic_range=SDR]/bv*+ba/b/bv*/best'
+    # Prioritize native H.264 (avc1) video and AAC (mp4a) audio so streams are already
+    # MP4-compatible right off the CDN, avoiding slow CPU re-encoding entirely.
+    $fmt = 'bv*[vcodec^=avc]+ba[acodec^=mp4a]/bv*[ext=mp4]+ba[ext=m4a]/bv*[dynamic_range=SDR]+ba/b[dynamic_range=SDR]/bv*+ba/b/best'
     $ytArgs = @(
         '--no-playlist', '--no-warnings', '--newline', '--no-mtime',
         '--retries', '10', '--fragment-retries', '10', '--socket-timeout', '30',
         '-f', $fmt,
         '-S', $sortStr,
-        '--merge-output-format', 'mkv',
+        '--merge-output-format', 'mp4/mkv',
         '--concurrent-fragments', '8',
         '--windows-filenames',
         '--ffmpeg-location', $Bin,
@@ -504,7 +504,7 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             } else {
                 $mp4File = Join-Path $WorkDir "$cleanTitle.mp4"
-                & $ffmpeg -y @ffAudioArgs -i $audioFile -loop 1 -i $downloadedImages[0] -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart $mp4File 2>&1 | Out-Null
+                & $ffmpeg -y @ffAudioArgs -i $audioFile -loop 1 -i $downloadedImages[0] -c:v libx264 -tune stillimage -preset ultrafast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart $mp4File 2>&1 | Out-Null
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             }
         }
@@ -713,17 +713,17 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
         $vArgs = @('-c:v', 'copy')                       # already compatible: no quality loss, instant
     } else {
         $transcode = $true
-        $vArgs = @('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '17', '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2')
+        $vArgs = @('-c:v', 'libx264', '-preset', 'superfast', '-crf', '19', '-threads', '0', '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2')
     }
     if (-not $acodec)          { $aArgs = @('-an') }
     elseif ($acodec -eq 'aac') { $aArgs = @('-c:a', 'copy') }
-    else                       { $aArgs = @('-c:a', 'aac', '-b:a', '256k', '-ac', '2') }
+    else                       { $aArgs = @('-c:a', 'aac', '-b:a', '192k', '-ac', '2') }
 
     $dur = ConvertTo-Num ([string](& $ffprobe -v error -show_entries format=duration -of 'default=nw=1:nk=1' $inFile | Select-Object -First 1))
-    $ff = @('-y', '-v', 'error', '-nostats', '-progress', 'pipe:1', '-i', $inFile, '-map', '0:v:0', '-map', '0:a:0?') + $vArgs + $aArgs + @('-movflags', '+faststart', $outFile)
+    $ff = @('-y', '-v', 'error', '-nostats', '-threads', '0', '-progress', 'pipe:1', '-i', $inFile, '-map', '0:v:0', '-map', '0:a:0?') + $vArgs + $aArgs + @('-movflags', '+faststart', $outFile)
 
-    $head = if ($transcode) { 'Converting Video' } else { 'Finalizing MP4' }
-    $subStatus = if ($transcode) { 'Re-encoding to WhatsApp-compatible H.264 + AAC...' } else { 'Optimizing MP4 for instant playback (faststart)...' }
+    $head = if ($transcode) { 'Converting Video' } elseif ($acodec -ne 'aac' -and $acodec) { 'Optimizing Audio' } else { 'Finalizing MP4' }
+    $subStatus = if ($transcode) { 'Re-encoding to WhatsApp-compatible H.264...' } elseif ($acodec -ne 'aac' -and $acodec) { 'Converting audio track to AAC...' } else { 'Optimizing MP4 for instant playback (faststart)...' }
     $valText = if ($transcode) { 'Converting' } else { 'Finalizing' }
     Update-ProgressToast $tag $head $script:vTitle 'indeterminate' $valText $subStatus
 
