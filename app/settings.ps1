@@ -81,22 +81,32 @@ $form.Controls.Add($cmbQ)
 [void](Add-Label 'Browser login cookies (for account-locked Instagram or YouTube links)' 20 122)
 $cmbC = New-Object System.Windows.Forms.ComboBox
 $cmbC.DropDownStyle = 'DropDownList'
-$cmbC.Location = New-Object System.Drawing.Point(20, 142); $cmbC.Size = New-Object System.Drawing.Size(200, 24)
-$cItems = @('', 'firefox', 'edge', 'chrome', 'brave')
-foreach ($c in $cItems) { if ($c -eq '') { [void]$cmbC.Items.Add('None') } else { [void]$cmbC.Items.Add($c.Substring(0, 1).ToUpper() + $c.Substring(1)) } }
+$cmbC.Location = New-Object System.Drawing.Point(20, 142); $cmbC.Size = New-Object System.Drawing.Size(175, 24)
+$cOptions = @(
+    @{ Text = 'None (no auto-cookies)'; Value = '' },
+    @{ Text = 'Firefox (auto-detect)';  Value = 'firefox' }
+)
+foreach ($opt in $cOptions) { [void]$cmbC.Items.Add($opt.Text) }
 $sel = 0
-for ($i = 0; $i -lt $cItems.Count; $i++) { if ($cItems[$i] -eq [string]$cfg['CookiesBrowser']) { $sel = $i } }
+for ($i = 0; $i -lt $cOptions.Count; $i++) {
+    if ($cOptions[$i].Value -eq [string]$cfg['CookiesBrowser']) { $sel = $i }
+}
 $cmbC.SelectedIndex = $sel
 $form.Controls.Add($cmbC)
 
 $btnImportCookies = New-Object System.Windows.Forms.Button
-$btnImportCookies.Location = New-Object System.Drawing.Point(230, 140)
-$btnImportCookies.Size = New-Object System.Drawing.Size(160, 26)
+$btnImportCookies.Location = New-Object System.Drawing.Point(205, 140)
+$btnImportCookies.Size = New-Object System.Drawing.Size(155, 26)
 
 $btnClearCookies = New-Object System.Windows.Forms.Button
 $btnClearCookies.Text = 'Clear'
-$btnClearCookies.Location = New-Object System.Drawing.Point(395, 140)
-$btnClearCookies.Size = New-Object System.Drawing.Size(65, 26)
+$btnClearCookies.Location = New-Object System.Drawing.Point(368, 140)
+$btnClearCookies.Size = New-Object System.Drawing.Size(55, 26)
+
+$btnHelpCookies = New-Object System.Windows.Forms.Button
+$btnHelpCookies.Text = '? Guide'
+$btnHelpCookies.Location = New-Object System.Drawing.Point(430, 140)
+$btnHelpCookies.Size = New-Object System.Drawing.Size(65, 26)
 
 $appDataCookie = Join-Path $env:LOCALAPPDATA 'ClipToast\cookies.txt'
 $rootCookie    = Join-Path $Root 'cookies.txt'
@@ -142,8 +152,24 @@ $btnClearCookies.Add_Click({
     [void][System.Windows.Forms.MessageBox]::Show("Imported cookies cleared.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
 })
 
+$btnHelpCookies.Add_Click({
+    $helpMsg = "HOW TO EXPORT COOKIES (Brave / Chrome / Edge):`n`n" +
+               "1. In Brave, Chrome, or Edge, install the free extension 'Get cookies.txt LOCALLY' from the Chrome Web Store.`n" +
+               "2. Go to instagram.com or youtube.com (make sure you are logged in).`n" +
+               "3. Click the extension in your toolbar and click 'Export'.`n" +
+               "4. In ClipToast Settings, click 'Import cookies.txt...' and select the saved file!`n`n" +
+               "Would you like to open the Chrome Web Store extension page now?"
+    $ans = [System.Windows.Forms.MessageBox]::Show($helpMsg, "ClipToast - How to Export Cookies", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Information)
+    if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) {
+        try {
+            Start-Process "https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+        } catch {}
+    }
+})
+
 $form.Controls.Add($btnImportCookies)
 $form.Controls.Add($btnClearCookies)
+$form.Controls.Add($btnHelpCookies)
 
 # Feature Checkboxes
 $chkSubs = New-Object System.Windows.Forms.CheckBox
@@ -251,7 +277,7 @@ function Save-Fields {
     $dir = $txtDir.Text.Trim()
     if ($dir) { $c['DownloadDir'] = $dir; try { New-Item -ItemType Directory -Force -Path $dir | Out-Null } catch {} }
     $c['MaxHeight']        = if ($cmbQ.SelectedIndex -ge 0) { [string]$qItems[$cmbQ.SelectedIndex].Value } else { '0' }
-    $c['CookiesBrowser']   = if ($cmbC.SelectedIndex -ge 0) { [string]$cItems[$cmbC.SelectedIndex] } else { '' }
+    $c['CookiesBrowser']   = if ($cmbC.SelectedIndex -ge 0) { [string]$cOptions[$cmbC.SelectedIndex].Value } else { '' }
     $c['DownloadSubs']     = $(if ($chkSubs.Checked) { '1' } else { '0' })
     $c['StartWithWindows'] = $(if ($chkTray.Checked) { '1' } else { '0' })
     $c['AutoUpdate']       = $(if ($chkU.Checked) { '1' } else { '0' })
