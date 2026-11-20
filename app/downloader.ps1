@@ -193,7 +193,30 @@ if ($AudioOnly) {
         $ytArgs += @('--write-subs', '--write-auto-subs', '--sub-langs', 'en,en-orig,hi,hi-orig', '--convert-subs', 'srt')
     }
 }
-if ($cfg['CookiesBrowser']) { $ytArgs += @('--cookies-from-browser', [string]$cfg['CookiesBrowser']) }
+
+# Resolve cookies: check for cookies.txt first (bypasses Windows Chromium DPAPI App-Bound Encryption), then CookiesBrowser
+$cookieFile = $null
+$candidateCookieFiles = @(
+    (Join-Path $env:LOCALAPPDATA 'ClipToast\cookies.txt'),
+    (Join-Path $Root 'cookies.txt'),
+    (Join-Path $AppDir 'cookies.txt'),
+    (Join-Path $dest 'cookies.txt')
+)
+foreach ($cf in $candidateCookieFiles) {
+    if (Test-Path -LiteralPath $cf) {
+        $cookieFile = $cf
+        break
+    }
+}
+
+$cookieArgs = @()
+if ($cookieFile) {
+    $cookieArgs = @('--cookies', $cookieFile)
+    Write-Log "Using cookies file: $cookieFile"
+} elseif ($cfg['CookiesBrowser']) {
+    $cookieArgs = @('--cookies-from-browser', [string]$cfg['CookiesBrowser'])
+}
+if ($cookieArgs) { $ytArgs += $cookieArgs }
 
 $script:srtNotAvailable = $false
 $script:ytLines = New-Object System.Collections.Generic.List[string]
@@ -286,6 +309,24 @@ function Invoke-Yt {
 
 Invoke-Yt
 
+$script:isDpapiError = $false
+if ($script:ytCode -ne 0) {
+    $hasDpapi = ($script:ytLines | Where-Object { $_ -match 'Failed to decrypt with DPAPI|issue #10927' })
+    if ($hasDpapi -and ($ytArgs -contains '--cookies-from-browser')) {
+        $script:isDpapiError = $true
+        Write-Log "Chromium App-Bound Encryption blocked browser cookie extraction (DPAPI). Retrying without browser cookies..."
+        Update-ProgressToast $tag 'Retrying...' $script:vTitle 'indeterminate' '' 'Browser locked cookies. Retrying without cookies...'
+        $newYtArgs = New-Object System.Collections.Generic.List[string]
+        for ($i = 0; $i -lt $ytArgs.Count; $i++) {
+            $arg = $ytArgs[$i]
+            if ($arg -eq '--cookies-from-browser') { $i++; continue }
+            $newYtArgs.Add($arg)
+        }
+        $ytArgs = $newYtArgs.ToArray()
+        Invoke-Yt
+    }
+}
+
 # Fallback: Instagram photo posts & carousels (with optional attached audio track)
 function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [string]$DestDir, [bool]$AudioOnly) {
     Write-Log "Attempting Instagram Photo/Carousel Fallback for: $PostUrl"
@@ -300,10 +341,18 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
     $dumpDir = Join-Path $WorkDir ('ig_' + [guid]::NewGuid().ToString('N').Substring(0, 6))
     New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
     
+    $dumpArgs = @('--no-warnings', '--write-pages')
+    if ($cookieFile -and (Test-Path -LiteralPath $cookieFile)) {
+        $dumpArgs += @('--cookies', $cookieFile)
+    } elseif ($cfg['CookiesBrowser'] -and -not $script:isDpapiError) {
+        $dumpArgs += @('--cookies-from-browser', [string]$cfg['CookiesBrowser'])
+    }
+    $dumpArgs += $PostUrl
+
     $prevPwd = Get-Location
     Set-Location $dumpDir
     try {
-        & $yt --no-warnings --write-pages $PostUrl 2>&1 | Out-Null
+        & $yt @dumpArgs 2>&1 | Out-Null
     } finally {
         Set-Location $prevPwd
     }
@@ -317,7 +366,17 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
     $media = $null
     try {
         $json = (Get-Content -LiteralPath $dumpFile.FullName -Raw -Encoding UTF8) | ConvertFrom-Json
-        $media = $json.data.xig_polaris_media.if_not_gated_logged_out
+        if ($json.data.xdt_shortcode_media) {
+            $media = $json.data.xdt_shortcode_media
+        } elseif ($json.data.xig_polaris_media) {
+            if ($json.data.xig_polaris_media.if_not_gated_logged_out) {
+                $media = $json.data.xig_polaris_media.if_not_gated_logged_out
+            } else {
+                $media = $json.data.xig_polaris_media
+            }
+        } elseif ($json.graphql.shortcode_media) {
+            $media = $json.graphql.shortcode_media
+        }
     } catch {
         Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
         return $false
@@ -380,6 +439,10 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
         $audioUrl = $media.clips_metadata.music_info.music_asset_info.progressive_download_url
     } elseif ($media.clips_metadata -and $media.clips_metadata.original_sound_info -and $media.clips_metadata.original_sound_info.progressive_download_url) {
         $audioUrl = $media.clips_metadata.original_sound_info.progressive_download_url
+    } elseif ($media.music_metadata -and $media.music_metadata.music_info -and $media.music_metadata.music_info.music_asset_info.progressive_download_url) {
+        $audioUrl = $media.music_metadata.music_info.music_asset_info.progressive_download_url
+    } elseif ($media.music_info -and $media.music_info.music_asset_info.progressive_download_url) {
+        $audioUrl = $media.music_info.music_asset_info.progressive_download_url
     }
 
     if ($audioUrl) {

@@ -81,13 +81,69 @@ $form.Controls.Add($cmbQ)
 [void](Add-Label 'Browser login cookies (for account-locked Instagram or YouTube links)' 20 122)
 $cmbC = New-Object System.Windows.Forms.ComboBox
 $cmbC.DropDownStyle = 'DropDownList'
-$cmbC.Location = New-Object System.Drawing.Point(20, 142); $cmbC.Size = New-Object System.Drawing.Size(260, 24)
+$cmbC.Location = New-Object System.Drawing.Point(20, 142); $cmbC.Size = New-Object System.Drawing.Size(200, 24)
 $cItems = @('', 'firefox', 'edge', 'chrome', 'brave')
 foreach ($c in $cItems) { if ($c -eq '') { [void]$cmbC.Items.Add('None') } else { [void]$cmbC.Items.Add($c.Substring(0, 1).ToUpper() + $c.Substring(1)) } }
 $sel = 0
 for ($i = 0; $i -lt $cItems.Count; $i++) { if ($cItems[$i] -eq [string]$cfg['CookiesBrowser']) { $sel = $i } }
 $cmbC.SelectedIndex = $sel
 $form.Controls.Add($cmbC)
+
+$btnImportCookies = New-Object System.Windows.Forms.Button
+$btnImportCookies.Location = New-Object System.Drawing.Point(230, 140)
+$btnImportCookies.Size = New-Object System.Drawing.Size(160, 26)
+
+$btnClearCookies = New-Object System.Windows.Forms.Button
+$btnClearCookies.Text = 'Clear'
+$btnClearCookies.Location = New-Object System.Drawing.Point(395, 140)
+$btnClearCookies.Size = New-Object System.Drawing.Size(65, 26)
+
+$appDataCookie = Join-Path $env:LOCALAPPDATA 'ClipToast\cookies.txt'
+$rootCookie    = Join-Path $Root 'cookies.txt'
+
+function Update-CookieUi {
+    $hasCookie = (Test-Path -LiteralPath $appDataCookie) -or (Test-Path -LiteralPath $rootCookie)
+    if ($hasCookie) {
+        $btnImportCookies.Text = [char]0x2714 + " Replace cookies.txt"
+        $btnImportCookies.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 30)
+        $btnClearCookies.Visible = $true
+    } else {
+        $btnImportCookies.Text = 'Import cookies.txt...'
+        $btnImportCookies.ForeColor = [System.Drawing.SystemColors]::ControlText
+        $btnClearCookies.Visible = $false
+    }
+}
+Update-CookieUi
+
+$btnImportCookies.Add_Click({
+    $ofd = New-Object System.Windows.Forms.OpenFileDialog
+    $ofd.Title = 'Select exported cookies.txt file'
+    $ofd.Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'
+    if ($ofd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        try {
+            $destDir = Split-Path -Parent $appDataCookie
+            if (-not (Test-Path -LiteralPath $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+            Copy-Item -LiteralPath $ofd.FileName -Destination $appDataCookie -Force
+            if (Test-Path -LiteralPath $Root) {
+                Copy-Item -LiteralPath $ofd.FileName -Destination $rootCookie -Force -ErrorAction SilentlyContinue
+            }
+            Update-CookieUi
+            [void][System.Windows.Forms.MessageBox]::Show("cookies.txt imported successfully!`n`nClipToast will now use these cookies for Instagram and account-locked downloads (bypassing Windows Chromium App-Bound Encryption).", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        } catch {
+            [void][System.Windows.Forms.MessageBox]::Show("Failed to import cookies: $_", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    }
+})
+
+$btnClearCookies.Add_Click({
+    if (Test-Path -LiteralPath $appDataCookie) { Remove-Item -LiteralPath $appDataCookie -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $rootCookie) { Remove-Item -LiteralPath $rootCookie -Force -ErrorAction SilentlyContinue }
+    Update-CookieUi
+    [void][System.Windows.Forms.MessageBox]::Show("Imported cookies cleared.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+})
+
+$form.Controls.Add($btnImportCookies)
+$form.Controls.Add($btnClearCookies)
 
 # Feature Checkboxes
 $chkSubs = New-Object System.Windows.Forms.CheckBox
