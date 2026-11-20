@@ -6,7 +6,6 @@ try { $OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $env:PYTHONIOENCODING = 'utf-8'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Initialize-Toast
-Clear-ClipToastOrphans
 
 $cfg     = Read-Config
 $yt      = Join-Path $Bin 'yt-dlp.exe'
@@ -15,10 +14,12 @@ $ffprobe = Join-Path $Bin 'ffprobe.exe'
 $env:Path = "$Bin;$env:Path"      # lets yt-dlp find deno
 $tag = 'dl' + [guid]::NewGuid().ToString('N').Substring(0, 10)
 
-# Restore tray icon if user exited it previously and has StartWithWindows enabled
+# Restore tray icon if user exited it previously and has StartWithWindows enabled (checked via fast mutex)
 if ($cfg['StartWithWindows'] -ne '0') {
     try {
-        $trayRunning = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*tray.ps1*' }
+        $trayMutex = $null
+        $trayRunning = [System.Threading.Mutex]::TryOpenExisting('Local\ClipToast_Tray_Mutex', [ref]$trayMutex)
+        if ($trayMutex) { $trayMutex.Dispose() }
         if (-not $trayRunning) {
             Start-ClipToastScript 'tray.ps1'
         }
@@ -662,7 +663,10 @@ if ($AudioOnly) {
     Update-ProgressToast $tag 'Processing Video' $script:vTitle 'indeterminate' 'Packaging' 'Checking WhatsApp and Windows compatibility...'
 }
 
-foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
+$workFiles = @(Get-ChildItem -LiteralPath $Work -File)
+$hasVideoOrAudio = ($workFiles | Where-Object { $_.Extension.ToLower() -in '.mp4', '.mkv', '.webm', '.mov', '.mp3' }).Count -gt 0
+
+foreach ($f in $workFiles) {
     $ext = $f.Extension.ToLower()
 
     # Determine safe base name (normalize if styled unicode font was stripped to punctuation)
@@ -685,7 +689,6 @@ foreach ($f in (Get-ChildItem -LiteralPath $Work -File)) {
 
     # High-resolution photo posts (standalone or carousels)
     if ($ext -in '.jpg', '.jpeg', '.png', '.webp') {
-        $hasVideoOrAudio = (Get-ChildItem -LiteralPath $Work -File | Where-Object { $_.Extension.ToLower() -in '.mp4', '.mkv', '.webm', '.mov', '.mp3' })
         if (-not $hasVideoOrAudio) {
             $saved += (Move-Unique $f.FullName ($cleanBase + $ext))
             continue

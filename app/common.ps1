@@ -356,34 +356,40 @@ function Initialize-Toast {
             }
         }
 
-        # Ensure AppUserModelId is registered in HKCU so Windows displays "ClipToast" as app title
-        try {
-            $regKey = 'HKCU:\Software\Classes\AppUserModelId\ClipToast'
-            if (-not (Test-Path -LiteralPath $regKey)) { New-Item -Path $regKey -Force | Out-Null }
-            Set-ItemProperty -Path $regKey -Name 'DisplayName' -Value 'ClipToast' -ErrorAction SilentlyContinue
-            if ($script:LogoPath) {
-                Set-ItemProperty -Path $regKey -Name 'IconUri' -Value $script:LogoPath -ErrorAction SilentlyContinue
-            }
-            Set-ItemProperty -Path $regKey -Name 'ShowInSettings' -Value 1 -Type DWord -ErrorAction SilentlyContinue
-        } catch { Write-Log "AppUserModelId registration notice: $_" }
+        # Ensure AppUserModelId and cliptoast:// protocol are registered (only writes if not already present)
+        $needAumid = -not (Test-Path -LiteralPath 'HKCU:\Software\Classes\AppUserModelId\ClipToast')
+        $needProto = -not (Test-Path -LiteralPath 'HKCU:\Software\Classes\cliptoast\shell\open\command')
 
-        # Register cliptoast:// protocol for toast actions (Cancel, Open, Play)
-        try {
-            $protoKey = 'HKCU:\Software\Classes\cliptoast'
-            if (-not (Test-Path -LiteralPath $protoKey)) { New-Item -Path $protoKey -Force | Out-Null }
-            Set-ItemProperty -Path $protoKey -Name '(Default)' -Value 'URL:ClipToast Protocol' -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path $protoKey -Name 'URL Protocol' -Value '' -ErrorAction SilentlyContinue
-            $cmdKey = Join-Path $protoKey 'shell\open\command'
-            if (-not (Test-Path -LiteralPath $cmdKey)) { New-Item -Path $cmdKey -Force | Out-Null }
-            $launcher = Get-ClipToastLauncher
-            if ($launcher) {
-                $cmdVal = '"{0}" --action "%1"' -f $launcher
-            } else {
-                $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-                $cmdVal = '"{0}" -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" "%1"' -f $ps, (Join-Path $AppDir 'action.ps1')
-            }
-            Set-ItemProperty -Path $cmdKey -Name '(Default)' -Value $cmdVal -ErrorAction SilentlyContinue
-        } catch { Write-Log "Protocol registration notice: $_" }
+        if ($needAumid) {
+            try {
+                $regKey = 'HKCU:\Software\Classes\AppUserModelId\ClipToast'
+                New-Item -Path $regKey -Force | Out-Null
+                Set-ItemProperty -Path $regKey -Name 'DisplayName' -Value 'ClipToast' -ErrorAction SilentlyContinue
+                if ($script:LogoPath) {
+                    Set-ItemProperty -Path $regKey -Name 'IconUri' -Value $script:LogoPath -ErrorAction SilentlyContinue
+                }
+                Set-ItemProperty -Path $regKey -Name 'ShowInSettings' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            } catch { Write-Log "AppUserModelId registration notice: $_" }
+        }
+
+        if ($needProto) {
+            try {
+                $protoKey = 'HKCU:\Software\Classes\cliptoast'
+                New-Item -Path $protoKey -Force | Out-Null
+                Set-ItemProperty -Path $protoKey -Name '(Default)' -Value 'URL:ClipToast Protocol' -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $protoKey -Name 'URL Protocol' -Value '' -ErrorAction SilentlyContinue
+                $cmdKey = Join-Path $protoKey 'shell\open\command'
+                New-Item -Path $cmdKey -Force | Out-Null
+                $launcher = Get-ClipToastLauncher
+                if ($launcher) {
+                    $cmdVal = '"{0}" --action "%1"' -f $launcher
+                } else {
+                    $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                    $cmdVal = '"{0}" -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" "%1"' -f $ps, (Join-Path $AppDir 'action.ps1')
+                }
+                Set-ItemProperty -Path $cmdKey -Name '(Default)' -Value $cmdVal -ErrorAction SilentlyContinue
+            } catch { Write-Log "Protocol registration notice: $_" }
+        }
 
         try {
             $script:Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($ToastAppId)
