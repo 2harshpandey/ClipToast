@@ -22,11 +22,12 @@ It also solves a unique problem other downloaders can't: **downloading Instagram
 ## Highlights
 
 - **Instant Shortcuts**:
-  - `Ctrl + Alt + G`: Download video as a universal H.264/AAC MP4.
+  - `Ctrl + Alt + G`: Download video as a universal H.264/AAC MP4 with creator attribution and stream-copy speed (~1s post-processing).
   - `Ctrl + Alt + A` or `Ctrl + Alt + M`: Extract 320kbps MP3 audio with embedded album artwork.
 - **Interactive Windows Toasts**: Track live progress, transfer speed, and ETA. Includes **Cancel**, **Play**, and **Open Folder** actions directly in the notification.
-- **Instagram Photo + Music Synthesizer**: Automatically merges still photos or carousels with their attached audio track into a WhatsApp-compatible MP4 video matching the song's duration.
-- **Account Cookies Support**: 1-click automatic detection for Firefox and easy `cookies.txt` import for Brave, Chrome, and Edge to access private or account-locked media.
+- **Instagram Photo + Music Synthesizer**: Automatically merges still photos or carousels with their attached audio track into a WhatsApp-compatible MP4 video matching the song's exact mobile app duration.
+- **Clean Creator Filenames**: Files are saved with creator attribution (e.g. `Creator - Title.mp4`) with path-safe length capping and collision prevention (`(1)`, `(2)`).
+- **Account Cookies Support**: 1-click automatic detection for Firefox and smart multi-site `cookies.txt` merging for Brave, Chrome, and Edge to access private or account-locked media.
 - **Zero-Friction Setup**: Per-user install (no admin rights needed), automatic tool configuration (yt-dlp, FFmpeg, Deno), and cryptographically signed auto-updates.
 
 ---
@@ -55,7 +56,7 @@ When a photo post or carousel with background music is shared on Instagram, Inst
 ### How ClipToast Fixes It
 ClipToast automatically extracts the uncompressed high-res photo (`.jpg`) and the background music stream (`.m4a`), then uses FFmpeg to synthesize them into a universal MP4:
 ```bash
-ffmpeg -loop 1 -i image.jpg -i audio.m4a -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest "ClipToast Downloads/Post.mp4"
+ffmpeg -loop 1 -i image.jpg -i audio.m4a -c:v libx264 -tune stillimage -preset ultrafast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest "ClipToast Downloads/Post.mp4"
 ```
 - **Video Mode (`Ctrl + Alt + G`)**: Generates an MP4 video matching the exact audio length, ready to share on WhatsApp or Discord.
 - **Audio Mode (`Ctrl + Alt + A`)**: Extracts just the song as a clean 320kbps MP3 with the photo embedded as cover art.

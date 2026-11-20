@@ -1,4 +1,4 @@
-# common.ps1 - shared helpers, dot-sourced by the other scripts
+﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $InstallDir = $Root
@@ -25,7 +25,7 @@ function Get-ClipToastLauncher {
     return $null
 }
 $ToastAppId = 'ClipToast'
-$AppVersion = '1.1.1'
+$AppVersion = '1.1.2'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'

@@ -1,7 +1,7 @@
 # build.ps1 - build launcher, (optional) download dependencies, and compile NSIS installer
 param(
     [switch]$BundleTools,
-    [string]$Version = '1.1.1'
+    [string]$Version = '1.1.2'
 )
 $ErrorActionPreference = 'Stop'
 $rootDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
