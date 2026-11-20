@@ -8,7 +8,7 @@
 [![Powered by yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red.svg)](https://github.com/yt-dlp/yt-dlp)
 [![Media Processing](https://img.shields.io/badge/Converter-FFmpeg-green.svg)](https://ffmpeg.org/)
 
-ClipToast is a media downloader for Windows 10 and 11. Copy any video or music link from your browser or chat, press a shortcut or click the tray icon, and ClipToast downloads the media in the background with interactive Windows toast notifications.
+ClipToast is an open-source background media downloader for Windows 11 and 10. Copy any video, music, or social link from your browser or chat, press a shortcut (`Ctrl + Alt + G` for video or `Ctrl + Alt + A` for MP3 audio), and ClipToast downloads and converts the media in the background with interactive Windows toast notifications. Supports YouTube, TikTok, Reddit, and Instagram — including downloading Instagram photo posts with background music and converting them into ready-to-share MP4 videos.
 
 <div align="center">
   <img src=".github/assets/demo.gif" alt="ClipToast Live Download Progress in Windows Toast" width="680" />
@@ -55,6 +55,28 @@ ClipToast uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its extraction engi
 | **Facebook and Pinterest** | Public video posts, reels, and clips |
 | **SoundCloud and Bandcamp** | Audio extraction saved directly as tagged MP3 files |
 | **Twitch and Vimeo** | Clips, broadcasts, and high bitrate video streams |
+
+---
+
+## Instagram Photo Posts with Music (Photo + Audio to MP4)
+
+### The Problem with Other Downloaders
+When someone uploads a **photo or carousel post with background music** on Instagram:
+- Instagram **never generates a video file on its servers**. It stores the picture as a static `.jpg` and streams the audio track separately within the Instagram mobile app.
+- On desktop web browsers, Instagram does not play the background music for still photo posts.
+- Online downloader websites (like SnapInsta, FastDL, SaveInsta, SaveFrom) and command-line tools like `yt-dlp` fail with `ERROR: [Instagram] There is no video in this post` or download only a silent, static JPEG image, discarding the music track completely.
+
+### How ClipToast Solves This
+ClipToast bridges this gap automatically using its integrated **FFmpeg synthesis engine**:
+1. **Automatic Detection**: When you copy an Instagram post link, ClipToast detects whether it is a video, reel, multi-slide carousel, or photo post.
+2. **Dual Stream Extraction**: It fetches the original uncompressed high-resolution photo (`.jpg`) and retrieves the attached background audio track (`.m4a`).
+3. **Automated MP4 Video Synthesis**: Using its bundled `ffmpeg.exe`, ClipToast merges the photo and the background music into a WhatsApp-compatible, universally playable **H.264 + AAC `.mp4` video** matching the exact song duration and playback loop:
+   ```bash
+   ffmpeg -loop 1 -i image.jpg -i audio.m4a -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest "ClipToast Downloads/Post.mp4"
+   ```
+4. **Direct MP3 Audio Extraction**: If you press **Ctrl + Alt + A** (Audio mode), ClipToast extracts just the song into a clean **320kbps MP3** with the post's image embedded as the album artwork.
+5. **Multi-Slide Carousels**: For multi-image posts, all carousel slides are preserved in full resolution in your `ClipToast Downloads` directory.
+6. **Zero-Configuration Fallback**: If Instagram restricts a specific song stream to its mobile client, ClipToast gracefully saves the full-resolution photo without throwing an error or crashing.
 
 ---
 
@@ -143,11 +165,10 @@ ClipToast/
 │   ├── cliptoast.png         # Toast logo asset
 │   └── version.txt           # Current version number
 ├── release/                  # Built release artifacts
-│   ├── ClipToastSetup-v1.1.1.exe     # Installer executable
-│   ├── ClipToast-v1.1.1-portable.zip # Portable zip package
-│   ├── ClipToast-app-1.1.1.zip       # Signed update bundle
-│   ├── latest.json                   # Update metadata manifest
-│   └── RELEASE_NOTES_v1.1.1.md       # Formatted release notes
+│   ├── ClipToastSetup-v1.1.2.exe     # Installer executable
+│   ├── ClipToast-v1.1.2-portable.zip # Portable zip package
+│   ├── ClipToast-app-1.1.2.zip       # Signed update bundle
+│   └── latest.json                   # Update metadata manifest
 ├── src/
 │   └── launcher/
 │       ├── Program.cs        # Source code for the launcher
