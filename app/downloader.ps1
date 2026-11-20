@@ -357,7 +357,10 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
         Set-Location $prevPwd
     }
 
-    $dumpFile = Get-ChildItem -Path $dumpDir -Filter "*graphql*.dump" -ErrorAction SilentlyContinue | Select-Object -First 1
+    $dumpFile = Get-ChildItem -Path $dumpDir -Filter "*.dump" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*media_*_info*' -or $_.Name -like '*graphql*' -or $_.Name -like '*info*.dump' } | Select-Object -First 1
+    if (-not $dumpFile) {
+        $dumpFile = Get-ChildItem -Path $dumpDir -Filter "*.dump" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
     if (-not $dumpFile) {
         Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
         return $false
@@ -366,7 +369,9 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
     $media = $null
     try {
         $json = (Get-Content -LiteralPath $dumpFile.FullName -Raw -Encoding UTF8) | ConvertFrom-Json
-        if ($json.data.xdt_shortcode_media) {
+        if ($json.items -and $json.items.Count -gt 0) {
+            $media = $json.items[0]
+        } elseif ($json.data.xdt_shortcode_media) {
             $media = $json.data.xdt_shortcode_media
         } elseif ($json.data.xig_polaris_media) {
             if ($json.data.xig_polaris_media.if_not_gated_logged_out) {
@@ -433,21 +438,55 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
     }
     if ($downloadedImages.Count -eq 0) { return $false }
 
-    # Check for attached audio track stream
+    # Check for attached audio track stream and snippet timing
     $audioUrl = $null
-    if ($media.clips_metadata -and $media.clips_metadata.music_info -and $media.clips_metadata.music_info.music_asset_info.progressive_download_url) {
-        $audioUrl = $media.clips_metadata.music_info.music_asset_info.progressive_download_url
-    } elseif ($media.clips_metadata -and $media.clips_metadata.original_sound_info -and $media.clips_metadata.original_sound_info.progressive_download_url) {
-        $audioUrl = $media.clips_metadata.original_sound_info.progressive_download_url
-    } elseif ($media.music_metadata -and $media.music_metadata.music_info -and $media.music_metadata.music_info.music_asset_info.progressive_download_url) {
-        $audioUrl = $media.music_metadata.music_info.music_asset_info.progressive_download_url
-    } elseif ($media.music_info -and $media.music_info.music_asset_info.progressive_download_url) {
-        $audioUrl = $media.music_info.music_asset_info.progressive_download_url
+    $audioStartTimeMs = 0
+    $audioDurationMs  = 0
+
+    if ($media.music_metadata -and $media.music_metadata.music_info) {
+        $mi = $media.music_metadata.music_info
+        if ($mi.music_asset_info -and $mi.music_asset_info.progressive_download_url) {
+            $audioUrl = $mi.music_asset_info.progressive_download_url
+        }
+        if ($mi.music_consumption_info) {
+            $mci = $mi.music_consumption_info
+            if ($mci.audio_asset_start_time_in_ms) { $audioStartTimeMs = [int]$mci.audio_asset_start_time_in_ms }
+            if ($mci.overlap_duration_in_ms) { $audioDurationMs = [int]$mci.overlap_duration_in_ms }
+        }
     }
+    if (-not $audioUrl -and $media.clips_metadata) {
+        if ($media.clips_metadata.music_info) {
+            $mi = $media.clips_metadata.music_info
+            if ($mi.music_asset_info -and $mi.music_asset_info.progressive_download_url) {
+                $audioUrl = $mi.music_asset_info.progressive_download_url
+            }
+            if ($mi.music_consumption_info) {
+                $mci = $mi.music_consumption_info
+                if ($mci.audio_asset_start_time_in_ms) { $audioStartTimeMs = [int]$mci.audio_asset_start_time_in_ms }
+                if ($mci.overlap_duration_in_ms) { $audioDurationMs = [int]$mci.overlap_duration_in_ms }
+            }
+        } elseif ($media.clips_metadata.original_sound_info -and $media.clips_metadata.original_sound_info.progressive_download_url) {
+            $audioUrl = $media.clips_metadata.original_sound_info.progressive_download_url
+        }
+    }
+    if (-not $audioUrl -and $media.music_info) {
+        $mi = $media.music_info
+        if ($mi.music_asset_info -and $mi.music_asset_info.progressive_download_url) {
+            $audioUrl = $mi.music_asset_info.progressive_download_url
+        }
+        if ($mi.music_consumption_info) {
+            $mci = $mi.music_consumption_info
+            if ($mci.audio_asset_start_time_in_ms) { $audioStartTimeMs = [int]$mci.audio_asset_start_time_in_ms }
+            if ($mci.overlap_duration_in_ms) { $audioDurationMs = [int]$mci.overlap_duration_in_ms }
+        }
+    }
+
+    # If still no snippet duration found, default to 30s max for photo posts with music
+    if ($audioDurationMs -le 0) { $audioDurationMs = 30000 }
 
     if ($audioUrl) {
         Update-ProgressToast $tag 'Processing Audio' $cleanTitle 'indeterminate' 'Audio' 'Merging attached audio track...'
-        $audioFile = Join-Path $WorkDir 'audio.m4a'
+        $audioFile = Join-Path $WorkDir 'audio_raw.mp4'
         if ($curl) {
             & $curl.Source -s -L -o $audioFile $audioUrl
         } else {
@@ -455,13 +494,17 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
         }
 
         if ((Test-Path -LiteralPath $audioFile) -and ((Get-Item -LiteralPath $audioFile).Length -gt 1000)) {
+            $startSec = [double]($audioStartTimeMs / 1000.0)
+            $durSec   = [double]($audioDurationMs / 1000.0)
+            $ffAudioArgs = @('-ss', "$startSec", '-t', "$durSec")
+
             if ($AudioOnly) {
                 $mp3File = Join-Path $WorkDir "$cleanTitle.mp3"
-                & $ffmpeg -y -i $audioFile -i $downloadedImages[0] -map 0:a -map 1:v -c:a libmp3lame -b:a 320k -c:v copy -id3v2_version 3 -metadata "title=$cleanTitle" $mp3File 2>&1 | Out-Null
+                & $ffmpeg -y @ffAudioArgs -i $audioFile -i $downloadedImages[0] -map 0:a -map 1:v -c:a libmp3lame -b:a 320k -c:v copy -id3v2_version 3 -metadata "title=$cleanTitle" $mp3File 2>&1 | Out-Null
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             } else {
                 $mp4File = Join-Path $WorkDir "$cleanTitle.mp4"
-                & $ffmpeg -y -loop 1 -i $downloadedImages[0] -i $audioFile -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest $mp4File 2>&1 | Out-Null
+                & $ffmpeg -y @ffAudioArgs -i $audioFile -loop 1 -i $downloadedImages[0] -c:v libx264 -tune stillimage -preset veryfast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart $mp4File 2>&1 | Out-Null
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             }
         }
