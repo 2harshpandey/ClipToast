@@ -161,7 +161,7 @@ if ($AudioOnly) {
         '--windows-filenames',
         '--ffmpeg-location', $Bin,
         '-P', $Work,
-        '-o', '%(title).150B.%(ext)s',
+        '-o', '%(uploader,channel,creator&{:.35s} - |)s%(title).80B.%(ext)s',
         '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)j'
     )
 } else {
@@ -192,7 +192,7 @@ if ($AudioOnly) {
         '--windows-filenames',
         '--ffmpeg-location', $Bin,
         '-P', $Work,
-        '-o', '%(title).150B.%(ext)s',
+        '-o', '%(uploader,channel,creator&{:.35s} - |)s%(title).80B.%(ext)s',
         '--progress-template', 'download:LGP|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress.status)s|%(info.title)j'
     )
     if ($cfg['DownloadSubs'] -eq '1') {
@@ -399,9 +399,16 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
     if ($media.caption -and $media.caption.text) {
         $caption = $media.caption.text
     }
-    $cleanTitle = if ($caption) { ($caption -split "`n")[0] } else { "Instagram_$shortcode" }
-    $cleanTitle = ($cleanTitle -replace '[\\/:*?"<>|]', '_').Trim()
-    if ($cleanTitle.Length -gt 70) { $cleanTitle = $cleanTitle.Substring(0, 70).Trim() }
+    $author = ''
+    if ($media.user -and $media.user.username) { $author = [string]$media.user.username }
+    elseif ($media.owner -and $media.owner.username) { $author = [string]$media.owner.username }
+
+    $rawTitle = if ($caption) { ($caption -split "`n")[0] } else { "Post_$shortcode" }
+    $rawTitle = ($rawTitle -replace '[\\/:*?"<>|]', '_').Trim()
+    if ($rawTitle.Length -gt 70) { $rawTitle = $rawTitle.Substring(0, 70).Trim() }
+
+    $cleanTitle = if ($author) { "$author - $rawTitle" } else { $rawTitle }
+    if ($cleanTitle.Length -gt 95) { $cleanTitle = $cleanTitle.Substring(0, 95).Trim() }
     if (-not $cleanTitle) { $cleanTitle = "Instagram_$shortcode" }
     $script:vTitle = $cleanTitle
 
