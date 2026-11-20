@@ -22,7 +22,7 @@ try {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'ClipToast - Settings'
-$form.ClientSize = New-Object System.Drawing.Size(520, 500)
+$form.ClientSize = New-Object System.Drawing.Size(520, 525)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -111,36 +111,52 @@ $btnHelpCookies.Size = New-Object System.Drawing.Size(65, 26)
 $appDataCookie = Join-Path $env:LOCALAPPDATA 'ClipToast\cookies.txt'
 $rootCookie    = Join-Path $Root 'cookies.txt'
 
+$lblCookieSites = New-Object System.Windows.Forms.Label
+$lblCookieSites.Location = New-Object System.Drawing.Point(20, 170)
+$lblCookieSites.Size = New-Object System.Drawing.Size(480, 18)
+$lblCookieSites.Font = New-Object System.Drawing.Font('Segoe UI', 8.25)
+$form.Controls.Add($lblCookieSites)
+
 function Update-CookieUi {
-    $hasCookie = (Test-Path -LiteralPath $appDataCookie) -or (Test-Path -LiteralPath $rootCookie)
-    if ($hasCookie) {
-        $btnImportCookies.Text = [char]0x2714 + " Replace cookies.txt"
+    $activeCookiePath = if (Test-Path -LiteralPath $appDataCookie) { $appDataCookie } elseif (Test-Path -LiteralPath $rootCookie) { $rootCookie } else { $null }
+    $activeDomains = if ($activeCookiePath) { Get-ActiveCookieDomains $activeCookiePath } else { @() }
+
+    if ($activeDomains.Count -gt 0) {
+        $btnImportCookies.Text = [char]0x2714 + " Import / Merge..."
         $btnImportCookies.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 30)
         $btnClearCookies.Visible = $true
+        $lblCookieSites.Text = "Active sessions: " + ($activeDomains -join ', ')
+        $lblCookieSites.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 40)
     } else {
         $btnImportCookies.Text = 'Import cookies.txt...'
         $btnImportCookies.ForeColor = [System.Drawing.SystemColors]::ControlText
         $btnClearCookies.Visible = $false
+        $lblCookieSites.Text = 'No imported cookies. Chromium browsers require cookies.txt.'
+        $lblCookieSites.ForeColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
     }
 }
 Update-CookieUi
 
 $btnImportCookies.Add_Click({
     $ofd = New-Object System.Windows.Forms.OpenFileDialog
-    $ofd.Title = 'Select exported cookies.txt file'
+    $ofd.Title = 'Select exported cookies.txt file to merge'
     $ofd.Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'
     if ($ofd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         try {
             $destDir = Split-Path -Parent $appDataCookie
             if (-not (Test-Path -LiteralPath $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
-            Copy-Item -LiteralPath $ofd.FileName -Destination $appDataCookie -Force
+
+            # Smart merge with existing cookies
+            Merge-CookieFiles $appDataCookie $ofd.FileName $appDataCookie
             if (Test-Path -LiteralPath $Root) {
-                Copy-Item -LiteralPath $ofd.FileName -Destination $rootCookie -Force -ErrorAction SilentlyContinue
+                Merge-CookieFiles $rootCookie $ofd.FileName $rootCookie
             }
             Update-CookieUi
-            [void][System.Windows.Forms.MessageBox]::Show("cookies.txt imported successfully!`n`nClipToast will now use these cookies for Instagram and account-locked downloads (bypassing Windows Chromium App-Bound Encryption).", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            $newDomains = Get-ActiveCookieDomains $appDataCookie
+            $domainList = if ($newDomains.Count -gt 0) { $newDomains -join ', ' } else { 'Imported file' }
+            [void][System.Windows.Forms.MessageBox]::Show("cookies.txt merged successfully!`n`nActive sessions: $domainList`n`nClipToast keeps sessions across multiple sites (Instagram, YouTube, etc.) combined without overwriting.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         } catch {
-            [void][System.Windows.Forms.MessageBox]::Show("Failed to import cookies: $_", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            [void][System.Windows.Forms.MessageBox]::Show("Failed to merge cookies: $_", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         }
     }
 })
@@ -157,7 +173,8 @@ $btnHelpCookies.Add_Click({
                "1. In Brave, Chrome, or Edge, install the free extension 'Get cookies.txt LOCALLY' from the Chrome Web Store.`n" +
                "2. Go to instagram.com or youtube.com (make sure you are logged in).`n" +
                "3. Click the extension in your toolbar and click 'Export'.`n" +
-               "4. In ClipToast Settings, click 'Import cookies.txt...' and select the saved file!`n`n" +
+               "4. In ClipToast Settings, click 'Import / Merge...' and select the file!`n`n" +
+               "Multi-Site Support: You can export cookies for Instagram today and YouTube tomorrow. ClipToast automatically merges them together without overwriting!`n`n" +
                "Would you like to open the Chrome Web Store extension page now?"
     $ans = [System.Windows.Forms.MessageBox]::Show($helpMsg, "ClipToast - How to Export Cookies", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Information)
     if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) {
@@ -174,19 +191,19 @@ $form.Controls.Add($btnHelpCookies)
 # Feature Checkboxes
 $chkSubs = New-Object System.Windows.Forms.CheckBox
 $chkSubs.Text = 'Save subtitles (.srt) alongside video when available'
-$chkSubs.Location = New-Object System.Drawing.Point(20, 178); $chkSubs.Size = New-Object System.Drawing.Size(460, 22)
+$chkSubs.Location = New-Object System.Drawing.Point(20, 196); $chkSubs.Size = New-Object System.Drawing.Size(460, 22)
 $chkSubs.Checked = ([string]$cfg['DownloadSubs'] -eq '1')
 $form.Controls.Add($chkSubs)
 
 $chkTray = New-Object System.Windows.Forms.CheckBox
 $chkTray.Text = 'Run ClipToast in system tray (on Windows startup)'
-$chkTray.Location = New-Object System.Drawing.Point(20, 204); $chkTray.Size = New-Object System.Drawing.Size(350, 22)
+$chkTray.Location = New-Object System.Drawing.Point(20, 222); $chkTray.Size = New-Object System.Drawing.Size(350, 22)
 $chkTray.Checked = ([string]$cfg['StartWithWindows'] -ne '0')
 $form.Controls.Add($chkTray)
 
 $btnStartTray = New-Object System.Windows.Forms.Button
 $btnStartTray.Text = 'Start Tray Now'
-$btnStartTray.Location = New-Object System.Drawing.Point(380, 201); $btnStartTray.Size = New-Object System.Drawing.Size(120, 26)
+$btnStartTray.Location = New-Object System.Drawing.Point(380, 219); $btnStartTray.Size = New-Object System.Drawing.Size(120, 26)
 $btnStartTray.Add_Click({
     Start-ClipToastScript 'tray.ps1'
     [void][System.Windows.Forms.MessageBox]::Show("ClipToast tray icon is now running near your Windows clock.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -195,14 +212,14 @@ $form.Controls.Add($btnStartTray)
 
 $chkU = New-Object System.Windows.Forms.CheckBox
 $chkU.Text = 'Install app updates automatically'
-$chkU.Location = New-Object System.Drawing.Point(20, 230); $chkU.Size = New-Object System.Drawing.Size(460, 22)
+$chkU.Location = New-Object System.Drawing.Point(20, 248); $chkU.Size = New-Object System.Drawing.Size(460, 22)
 $chkU.Checked = ([string]$cfg['AutoUpdate'] -ne '0')
 $form.Controls.Add($chkU)
 
 # Media Dependencies Section
 $grpTools = New-Object System.Windows.Forms.GroupBox
 $grpTools.Text = 'Media Dependencies'
-$grpTools.Location = New-Object System.Drawing.Point(20, 258)
+$grpTools.Location = New-Object System.Drawing.Point(20, 276)
 $grpTools.Size = New-Object System.Drawing.Size(480, 58)
 
 $lblToolStatus = New-Object System.Windows.Forms.Label
@@ -244,31 +261,31 @@ $grpTools.Controls.Add($btnReinstallTools)
 $form.Controls.Add($grpTools)
 
 # Quick Shortcuts Banner
-$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A / Ctrl+Alt+M (Audio MP3)' 20 326 480
+$lblHotkeys = Add-Label 'Shortcuts: Ctrl+Alt+G (Video)  |  Ctrl+Alt+A / Ctrl+Alt+M (Audio MP3)' 20 344 480
 $lblHotkeys.ForeColor = [System.Drawing.Color]::FromArgb(30, 90, 180)
-$lblSites = Add-Label 'Supports 1,000+ sites: YouTube, Instagram, TikTok, Reddit, Twitter/X, Pinterest...' 20 346 480
+$lblSites = Add-Label 'Supports 1,000+ sites: YouTube, Instagram, TikTok, Reddit, Twitter/X, Pinterest...' 20 364 480
 $lblSites.ForeColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
 
 # Update source
-[void](Add-Label 'Update source URL' 20 372)
+[void](Add-Label 'Update source URL' 20 390)
 $txtUrl = New-Object System.Windows.Forms.TextBox
-$txtUrl.Location = New-Object System.Drawing.Point(20, 392); $txtUrl.Size = New-Object System.Drawing.Size(480, 24)
+$txtUrl.Location = New-Object System.Drawing.Point(20, 410); $txtUrl.Size = New-Object System.Drawing.Size(480, 24)
 $txtUrl.Text = $cfg['UpdateUrl']
 $form.Controls.Add($txtUrl)
 
 # Bottom Bar
-[void](Add-Label ('Version ' + $AppVersion) 20 465 120)
+[void](Add-Label ('Version ' + $AppVersion) 20 485 120)
 
 $btnCheck = New-Object System.Windows.Forms.Button
-$btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 430); $btnCheck.Size = New-Object System.Drawing.Size(140, 28)
+$btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 450); $btnCheck.Size = New-Object System.Drawing.Size(140, 28)
 $form.Controls.Add($btnCheck)
 
 $btnSave = New-Object System.Windows.Forms.Button
-$btnSave.Text = 'Save'; $btnSave.Location = New-Object System.Drawing.Point(330, 430); $btnSave.Size = New-Object System.Drawing.Size(80, 28)
+$btnSave.Text = 'Save'; $btnSave.Location = New-Object System.Drawing.Point(330, 450); $btnSave.Size = New-Object System.Drawing.Size(80, 28)
 $form.Controls.Add($btnSave)
 
 $btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = 'Cancel'; $btnCancel.Location = New-Object System.Drawing.Point(420, 430); $btnCancel.Size = New-Object System.Drawing.Size(80, 28)
+$btnCancel.Text = 'Cancel'; $btnCancel.Location = New-Object System.Drawing.Point(420, 450); $btnCancel.Size = New-Object System.Drawing.Size(80, 28)
 $btnCancel.Add_Click({ $form.Close() })
 $form.Controls.Add($btnCancel)
 

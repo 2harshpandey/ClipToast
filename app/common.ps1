@@ -1,4 +1,4 @@
-# common.ps1 - shared helpers, dot-sourced by the other scripts
+﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $InstallDir = $Root
@@ -219,6 +219,88 @@ function Test-Tools {
         } catch { return $false }
     }
     return $true
+}
+
+# ---------------- cookies management ----------------
+function Merge-CookieFiles([string]$ExistingPath, [string]$NewPath, [string]$OutputPath) {
+    $cookieMap = [System.Collections.Specialized.OrderedDictionary]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $headerLines = New-Object System.Collections.Generic.List[string]
+    $headerLines.Add('# Netscape HTTP Cookie File')
+    $headerLines.Add('# Merged by ClipToast')
+
+    # Load existing cookies if present
+    if ($ExistingPath -and (Test-Path -LiteralPath $ExistingPath)) {
+        foreach ($line in (Get-Content -LiteralPath $ExistingPath -Encoding UTF8)) {
+            $t = $line.Trim()
+            if (-not $t -or $t.StartsWith('#')) { continue }
+            $parts = $t -split "`t"
+            if ($parts.Count -ge 7) {
+                # Key uniquely identifies cookie: Domain + Path + Name
+                $key = "$($parts[0].ToLower())|$($parts[2])|$($parts[5])"
+                $cookieMap[$key] = $t
+            }
+        }
+    }
+
+    # Merge/override with new cookies
+    if ($NewPath -and (Test-Path -LiteralPath $NewPath)) {
+        foreach ($line in (Get-Content -LiteralPath $NewPath -Encoding UTF8)) {
+            $t = $line.Trim()
+            if (-not $t -or $t.StartsWith('#')) { continue }
+            $parts = $t -split "`t"
+            if ($parts.Count -ge 7) {
+                $key = "$($parts[0].ToLower())|$($parts[2])|$($parts[5])"
+                $cookieMap[$key] = $t
+            }
+        }
+    }
+
+    $outLines = New-Object System.Collections.Generic.List[string]
+    $outLines.AddRange($headerLines)
+    foreach ($val in $cookieMap.Values) {
+        $outLines.Add($val)
+    }
+
+    $outDir = Split-Path -Parent $OutputPath
+    if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
+    [System.IO.File]::WriteAllLines($OutputPath, $outLines, [System.Text.Encoding]::UTF8)
+}
+
+function Get-ActiveCookieDomains([string]$CookiePath) {
+    $domains = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+    if (-not $CookiePath -or -not (Test-Path -LiteralPath $CookiePath)) { return @() }
+
+    $nowUnix = Get-UnixNow
+    foreach ($line in (Get-Content -LiteralPath $CookiePath -Encoding UTF8)) {
+        $t = $line.Trim()
+        if (-not $t -or $t.StartsWith('#')) { continue }
+        $parts = $t -split "`t"
+        if ($parts.Count -ge 7) {
+            $domain = $parts[0].TrimStart('.')
+            $expiry = [int64]0
+            [void][int64]::TryParse($parts[4], [ref]$expiry)
+            if ($expiry -eq 0 -or $expiry -gt $nowUnix) {
+                if ($domain -like '*instagram.com*') { [void]$domains.Add('Instagram') }
+                elseif ($domain -like '*youtube.com*' -or $domain -like '*google.com*') { [void]$domains.Add('YouTube') }
+                elseif ($domain -like '*reddit.com*') { [void]$domains.Add('Reddit') }
+                elseif ($domain -like '*tiktok.com*') { [void]$domains.Add('TikTok') }
+                elseif ($domain -like '*twitter.com*' -or $domain -like '*x.com*') { [void]$domains.Add('Twitter/X') }
+                elseif ($domain -like '*facebook.com*') { [void]$domains.Add('Facebook') }
+                elseif ($domain -like '*twitch.tv*') { [void]$domains.Add('Twitch') }
+                else {
+                    $partsD = $domain.Split('.')
+                    if ($partsD.Count -ge 2) {
+                        $name = $partsD[$partsD.Count - 2]
+                        if ($name.Length -gt 1) {
+                            $name = $name.Substring(0, 1).ToUpper() + $name.Substring(1)
+                            [void]$domains.Add($name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return @($domains | Sort-Object)
 }
 
 # ---------------- formatting ----------------

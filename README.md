@@ -74,7 +74,7 @@ Modern Chromium browsers on Windows lock cookies with App-Bound Encryption. To u
 1. In your browser, install the free extension [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) from the Chrome Web Store.
 2. Visit [instagram.com](https://www.instagram.com) or [youtube.com](https://www.youtube.com) while logged in.
 3. Click the extension icon in your toolbar and click **Export** (saves `cookies.txt`).
-4. In ClipToast Settings, click **Import cookies.txt...** (or click **? Guide**). ClipToast will use these cookies for all authenticated downloads.
+4. In ClipToast Settings, click **Import / Merge...** (or click **? Guide**). ClipToast automatically merges cookies across multiple sites (Instagram, YouTube, etc.) into one combined file without overwriting.
 
 ---
 

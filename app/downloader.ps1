@@ -574,6 +574,24 @@ if ($script:ytCode -ne 0) {
     $platform = 'media link'
     try { $platform = ([System.Uri]$url).Host } catch {}
 
+    # Check for site-specific authentication or session expiration errors
+    $isAuthError = ($script:ytLines | Where-Object { 
+        $_ -match 'Sign in to confirm your age|login_required|checkpoint_required|Please log in|confirm you are not a bot|Members-only content|This video is private|requires authentication|HTTP Error 401|HTTP Error 403' 
+    })
+    if ($isAuthError) {
+        $siteName = 'this site'
+        if ($url -match 'instagram\.com') { $siteName = 'Instagram' }
+        elseif ($url -match 'youtube\.com|youtu\.be') { $siteName = 'YouTube' }
+        elseif ($url -match 'tiktok\.com') { $siteName = 'TikTok' }
+        elseif ($url -match 'reddit\.com') { $siteName = 'Reddit' }
+        elseif ($url -match 'twitter\.com|x\.com') { $siteName = 'Twitter/X' }
+        
+        $authMsg = "Session expired or login required for $siteName. Please re-export cookies in browser and merge in Settings."
+        Write-Log "AUTH EXPIRED/REQUIRED: $siteName - $err"
+        Show-Toast "$siteName Session Required" $authMsg $tag '' '' $tag
+        exit 1
+    }
+
     $userPattern = [regex]::Escape($env:USERNAME)
     $profilePattern = [regex]::Escape($env:USERPROFILE)
     $rawLogs = ($script:ytLines | Select-Object -Last 25) -join "`n"
