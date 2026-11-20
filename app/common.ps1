@@ -271,6 +271,24 @@ function Get-ActiveCookieDomains([string]$CookiePath) {
     if (-not $CookiePath -or -not (Test-Path -LiteralPath $CookiePath)) { return @() }
 
     $nowUnix = Get-UnixNow
+    $knownAuth = [ordered]@{
+        'Instagram'  = @{ Pattern = 'instagram\.com$'; Tokens = @('sessionid', 'ds_user_id') }
+        'YouTube'    = @{ Pattern = '(youtube\.com|google\.com)$'; Tokens = @('SAPISID', '__Secure-1PAPISID', '__Secure-3PAPISID', 'SID', '__Secure-1PSID', '__Secure-3PSID', 'LOGIN_INFO', 'SSID', 'HSID') }
+        'TikTok'     = @{ Pattern = 'tiktok\.com$'; Tokens = @('sessionid', 'sessionid_ss', 'sid_tt', 'sid_guard') }
+        'Reddit'     = @{ Pattern = 'reddit\.com$'; Tokens = @('reddit_session', 'token_v2') }
+        'Twitter/X'  = @{ Pattern = '(twitter\.com|x\.com)$'; Tokens = @('auth_token') }
+        'Facebook'   = @{ Pattern = '(facebook\.com|fb\.com)$'; Tokens = @('c_user', 'xs') }
+        'Twitch'     = @{ Pattern = 'twitch\.tv$'; Tokens = @('auth-token', 'login', 'twilight-user') }
+        'SoundCloud' = @{ Pattern = 'soundcloud\.com$'; Tokens = @('oauth_token') }
+        'Pinterest'  = @{ Pattern = 'pinterest\.[a-z.]+$'; Tokens = @('_auth', '_pinterest_sess') }
+        'Vimeo'      = @{ Pattern = 'vimeo\.com$'; Tokens = @('vimeo', 'is_logged_in') }
+        'Spotify'    = @{ Pattern = 'spotify\.com$'; Tokens = @('sp_dc', 'sp_key') }
+        'Bilibili'   = @{ Pattern = 'bilibili\.com$'; Tokens = @('SESSDATA', 'DedeUserID') }
+        'LinkedIn'   = @{ Pattern = 'linkedin\.com$'; Tokens = @('li_at') }
+        'Threads'    = @{ Pattern = 'threads\.net$'; Tokens = @('sessionid', 'ds_user_id') }
+        'Patreon'    = @{ Pattern = 'patreon\.com$'; Tokens = @('session_id') }
+    }
+
     foreach ($line in (Get-Content -LiteralPath $CookiePath -Encoding UTF8)) {
         $t = $line.Trim()
         if (-not $t -or $t.StartsWith('#')) { continue }
@@ -279,15 +297,31 @@ function Get-ActiveCookieDomains([string]$CookiePath) {
             $domain = $parts[0].TrimStart('.')
             $expiry = [int64]0
             [void][int64]::TryParse($parts[4], [ref]$expiry)
-            if ($expiry -eq 0 -or $expiry -gt $nowUnix) {
-                if ($domain -like '*instagram.com*') { [void]$domains.Add('Instagram') }
-                elseif ($domain -like '*youtube.com*' -or $domain -like '*google.com*') { [void]$domains.Add('YouTube') }
-                elseif ($domain -like '*reddit.com*') { [void]$domains.Add('Reddit') }
-                elseif ($domain -like '*tiktok.com*') { [void]$domains.Add('TikTok') }
-                elseif ($domain -like '*twitter.com*' -or $domain -like '*x.com*') { [void]$domains.Add('Twitter/X') }
-                elseif ($domain -like '*facebook.com*') { [void]$domains.Add('Facebook') }
-                elseif ($domain -like '*twitch.tv*') { [void]$domains.Add('Twitch') }
-                else {
+            if ($expiry -ne 0 -and $expiry -le $nowUnix) { continue }
+
+            $cookieName = $parts[5].Trim()
+            $cookieVal  = $parts[6].Trim()
+            if ([string]::IsNullOrEmpty($cookieVal) -or $cookieVal -eq 'deleted') { continue }
+
+            $matched = $false
+            foreach ($site in $knownAuth.Keys) {
+                $def = $knownAuth[$site]
+                if ($domain -match $def.Pattern) {
+                    $matched = $true
+                    foreach ($tok in $def.Tokens) {
+                        if ([string]::Equals($cookieName, $tok, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            [void]$domains.Add($site)
+                            break
+                        }
+                    }
+                    break
+                }
+            }
+
+            if (-not $matched) {
+                # For generic unlisted sites, ignore non-auth/anonymous/guest/consent/telemetry cookies
+                $isIgnored = $cookieName -match '^(pref|socs|ysc|gps|guest|guest_id.*|visitor.*|device.*|datr|mid|ig_did|csrftoken|csrf.*|xsrf.*|cf_.*|__cf.*|_ga.*|_gid|_gat.*|lang.*|locale.*|country.*|notice.*|consent.*|optimizely.*|fr|sb|wd|dpr|rur|bcookie|bscookie|lidc|vuid|mstoken|ttwid|edge_bucket|buvid.*|_uuid|__secure-rollout_token|__secure-ynid)$'
+                if (-not $isIgnored -and ($cookieName -match 'session|auth|token|jwt|login' -and $cookieVal.Length -ge 8)) {
                     $partsD = $domain.Split('.')
                     if ($partsD.Count -ge 2) {
                         $name = $partsD[$partsD.Count - 2]
