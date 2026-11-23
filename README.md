@@ -28,6 +28,8 @@ It also solves a unique problem other downloaders can't: **downloading Instagram
 - **Instagram Photo + Music Synthesizer**: Automatically merges still photos or carousels with their attached audio track into a WhatsApp-compatible MP4 video matching the song's exact mobile app duration.
 - **Clean Creator Filenames**: Files are saved with creator attribution (e.g. `Creator - Title.mp4`) with path-safe length capping and collision prevention (`(1)`, `(2)`).
 - **Account Cookies Support**: 1-click automatic detection for Firefox and smart multi-site `cookies.txt` merging for Brave, Chrome, and Edge to access private or account-locked media.
+- **Background Idle Auto-Updates**: System tray automatically checks for signed ClipToast and `yt-dlp` updates in the background while your PC is idle, keeping your tools fresh without interrupting active downloads.
+- **Smarter, Human-Readable Alerts**: If a platform blocks guest access (Instagram login required, YouTube bot checks, rate limits, or geo-blocks), ClipToast explains the exact cause and provides a 1-click fix.
 - **Zero-Friction Setup**: Per-user install (no admin rights needed), automatic tool configuration (yt-dlp, FFmpeg, Deno), and cryptographically signed auto-updates.
 
 ---
@@ -86,7 +88,7 @@ Modern Chromium browsers on Windows lock cookies with App-Bound Encryption. To u
 2. Run the installer (no administrator privileges required).
 3. The installer configures all media tools (`yt-dlp`, `FFmpeg`, `Deno`) automatically and adds ClipToast to your system tray.
 
-*(If Windows SmartScreen appears on first run because ClipToast is independent and open-source, click **More info** $\rightarrow$ **Run anyway**).*
+*(If Windows SmartScreen appears on first run because ClipToast is independent and open-source, click **More info** → **Run anyway**).*
 
 ### Portable Version
 1. Download [ClipToast-v1.1.3-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.3-portable.zip).
@@ -119,7 +121,19 @@ Right-click the ClipToast tray icon near your clock and select **Settings**:
 - **Subtitles**: Automatically download `.srt` captions when available.
 - **Cookies**: Auto-detect Firefox session or import `cookies.txt` with one click.
 - **Dependencies**: View status or reinstall media engines (`yt-dlp`, `FFmpeg`, `Deno`) with one click.
+- **Test Notification**: Instantly send a test notification to verify that Windows Action Center and banners are working.
 - **Auto-Updates**: Automatically checks for signed app updates in the background.
+
+---
+
+## Troubleshooting Notifications
+
+If toast popups don't appear on your screen:
+1. Open ClipToast **Settings** (right-click the tray icon near your clock) and click **Test Notification**.
+2. If no popup appears, check **Windows Settings → System → Notifications**:
+   - Ensure **Notifications** are toggled **On**.
+   - Scroll down to **ClipToast** and make sure **Show notification banners** is checked.
+   - Check that **Do Not Disturb** (Focus Assist) is not silencing your alerts.
 
 ---
 

@@ -231,7 +231,6 @@ Section "Install"
     FileOpen $0 "$INSTDIR\config.txt" w
     FileWrite $0 "DownloadDir=$DownloadDir$\r$\n"
     FileWrite $0 "UpdateUrl=${UPDATE_URL}$\r$\n"
-    FileWrite $0 "AudioOnly=0$\r$\n"
     FileWrite $0 "DownloadSubs=0$\r$\n"
     FileWrite $0 "StartWithWindows=1$\r$\n"
     FileWrite $0 "AutoUpdate=1$\r$\n"
