@@ -5,7 +5,7 @@
 #
 # Output: ClipToast-app-<version>.zip and latest.json -> upload BOTH to the GitHub release.
 param(
-    [Parameter(Mandatory)][string]$Version,
+    [string]$Version = '',
     [string]$BaseUrl = '',
     [string]$PrivateKey = '',
     [string]$Notes = '',
@@ -16,6 +16,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 if (-not $AppDir) { $AppDir = Join-Path $scriptDir 'app' }
+if (-not $Version) {
+    $verFile = Join-Path $AppDir 'version.txt'
+    if (Test-Path -LiteralPath $verFile) {
+        $Version = (Get-Content -LiteralPath $verFile -Raw).Trim()
+    } else {
+        throw "Version parameter is required (e.g. -Version 1.1.3)"
+    }
+}
 if (-not $OutDir) { $OutDir = Join-Path $scriptDir 'release' }
 if (-not $PrivateKey) { $PrivateKey = Join-Path $scriptDir 'PRIVATE-update-signing-key.xml' }
 if (-not $BaseUrl) {
@@ -90,8 +98,9 @@ if (-not $makensis) {
 }
 $installerPath = Join-Path $OutDir "ClipToastSetup-v$Version.exe"
 if ($makensis) {
-    Write-Host "Compiling NSIS installer with $makensis to $installerPath ..."
-    & $makensis.FullName "/DOUT_FILE=$installerPath" "/DAPP_VERSION=$Version" (Join-Path $scriptDir 'installer.nsi')
+    $makensisPath = if ($makensis -is [System.IO.FileInfo]) { $makensis.FullName } else { $makensis.Source }
+    Write-Host "Compiling NSIS installer with $makensisPath to $installerPath ..."
+    & $makensisPath "/DOUT_FILE=$installerPath" "/DAPP_VERSION=$Version" (Join-Path $scriptDir 'installer.nsi')
 }
 
 Write-Host ''

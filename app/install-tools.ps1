@@ -28,7 +28,7 @@ try {
 $mutex = $null
 $hasLock = $false
 try {
-    $mutex = New-Object System.Threading.Mutex($false, 'Global\ClipToast_InstallTools_Mutex')
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\ClipToast_InstallTools_Mutex')
     try {
         $hasLock = $mutex.WaitOne(300000) # Wait up to 5 minutes
     } catch [System.Threading.AbandonedMutexException] {

@@ -5,7 +5,7 @@ Unicode true
   !define APP_NAME "ClipToast"
 !endif
 !ifndef APP_VERSION
-  !define APP_VERSION "1.1.2"
+  !define APP_VERSION "1.1.3"
 !endif
 !ifndef UPDATE_URL
   !define UPDATE_URL "https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json"
@@ -20,7 +20,7 @@ Unicode true
 
 Name "${APP_NAME}"
 !ifndef OUT_FILE
-  !define OUT_FILE "release\ClipToastSetup-v1.1.2.exe"
+  !define OUT_FILE "release\ClipToastSetup-v1.1.3.exe"
 !endif
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\ClipToast"
@@ -28,14 +28,14 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 CRCCheck on
 BrandingText "${APP_NAME} ${APP_VERSION}"
-VIProductVersion "1.1.2.0"
+VIProductVersion "1.1.3.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} - Seamless Windows Clipboard Media Downloader"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ClipToast"
 VIAddVersionKey "CompanyName" "ClipToast"
-VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.2.exe"
+VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.3.exe"
 
 Var DownloadDir
 
@@ -78,8 +78,44 @@ Var DownloadDir
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+; Helper function: Reads DownloadDir from existing config.txt if present
+Function ReadConfigDownloadDir
+  ${If} ${FileExists} "$INSTDIR\config.txt"
+    Push $0
+    Push $1
+    Push $2
+    ClearErrors
+    FileOpen $0 "$INSTDIR\config.txt" r
+    IfErrors done
+  read_loop:
+    FileRead $0 $1
+    IfErrors close
+    StrCpy $2 $1 12
+    ${If} $2 == "DownloadDir="
+      StrCpy $DownloadDir $1 "" 12
+    trim_loop:
+      StrCpy $2 $DownloadDir "" -1
+      ${If} $2 == "$\r"
+      ${OrIf} $2 == "$\n"
+      ${OrIf} $2 == " "
+        StrCpy $DownloadDir $DownloadDir -1
+        Goto trim_loop
+      ${EndIf}
+      Goto close
+    ${EndIf}
+    Goto read_loop
+  close:
+    FileClose $0
+  done:
+    Pop $2
+    Pop $1
+    Pop $0
+  ${EndIf}
+FunctionEnd
+
 Function .onInit
   StrCpy $DownloadDir "$PROFILE\Downloads\ClipToast Downloads"
+  Call ReadConfigDownloadDir
 FunctionEnd
 
 ; Helper function: Guarantees the selected installation path ends with \ClipToast
@@ -139,6 +175,7 @@ Function InstDirLeave
   Push "$INSTDIR"
   Call EnsureClipToastFolder
   Pop "$INSTDIR"
+  Call ReadConfigDownloadDir
 FunctionEnd
 
 Function DownloadDirPre
@@ -189,7 +226,7 @@ Section "Install"
     ${EndIf}
   ${EndIf}
 
-  ; Create default config if not existing (native NSIS, no PowerShell execution)
+  ; Create default config and download folder only if not existing (fresh install)
   ${IfNot} ${FileExists} "$INSTDIR\config.txt"
     FileOpen $0 "$INSTDIR\config.txt" w
     FileWrite $0 "DownloadDir=$DownloadDir$\r$\n"
@@ -200,9 +237,8 @@ Section "Install"
     FileWrite $0 "AutoUpdate=1$\r$\n"
     FileWrite $0 "LastYtdlpUpdate=0$\r$\n"
     FileClose $0
+    CreateDirectory "$DownloadDir"
   ${EndIf}
-
-  CreateDirectory "$DownloadDir"
 
   SetOutPath "$INSTDIR"
   ; Create Start menu shortcuts (pointing directly to ClipToast.exe launcher)
@@ -230,6 +266,11 @@ Section "Install"
   WriteRegStr HKCU "Software\Classes\AppUserModelId\ClipToast" "DisplayName" "${APP_NAME}"
   WriteRegStr HKCU "Software\Classes\AppUserModelId\ClipToast" "IconUri" "$INSTDIR\cliptoast.png"
   WriteRegDWORD HKCU "Software\Classes\AppUserModelId\ClipToast" "ShowInSettings" 1
+
+  ; Ensure toast notification banners are enabled in Windows Settings
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\ClipToast" "Enabled" 1
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\ClipToast" "ShowBanners" 1
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\ClipToast" "ShowInActionCenter" 1
 
   ; Register cliptoast:// protocol for toast actions (Cancel, Open, Play)
   WriteRegStr HKCU "Software\Classes\cliptoast" "" "URL:ClipToast Protocol"

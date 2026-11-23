@@ -25,7 +25,7 @@ function Get-ClipToastLauncher {
     return $null
 }
 $ToastAppId = 'ClipToast'
-$AppVersion = '1.1.2'
+$AppVersion = '1.1.3'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'
@@ -49,7 +49,7 @@ function Remove-WorkDirectoryRobust([string]$WorkDir, [int]$ParentPid = 0) {
     if ([string]::IsNullOrWhiteSpace($WorkDir)) { return $false }
     try {
         $WorkDir = [System.IO.Path]::GetFullPath($WorkDir).TrimEnd('\', '/')
-        $tempBase = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\', '/')
+        $tempBase = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
 
         # Security check: workDir must strictly reside inside TEMP and start with cliptoast_
         if (-not $WorkDir.StartsWith($tempBase, [System.StringComparison]::OrdinalIgnoreCase) -or
@@ -194,10 +194,21 @@ function Read-Config {
         StartWithWindows = '1'
     }
     if (Test-Path -LiteralPath $ConfigPath) {
-        foreach ($line in (Get-Content -LiteralPath $ConfigPath -Encoding UTF8)) {
-            $i = $line.IndexOf('=')
-            if ($i -gt 0 -and -not $line.StartsWith('#')) {
-                $cfg[$line.Substring(0, $i).Trim()] = $line.Substring($i + 1).Trim()
+        $lines = $null
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+                $lines = Get-Content -LiteralPath $ConfigPath -Encoding UTF8 -ErrorAction Stop
+                break
+            } catch {
+                Start-Sleep -Milliseconds (30 * $attempt)
+            }
+        }
+        if ($lines) {
+            foreach ($line in $lines) {
+                $i = $line.IndexOf('=')
+                if ($i -gt 0 -and -not $line.StartsWith('#')) {
+                    $cfg[$line.Substring(0, $i).Trim()] = $line.Substring($i + 1).Trim()
+                }
             }
         }
     }
@@ -207,7 +218,14 @@ function Read-Config {
 function Write-Config($cfg) {
     $lines = @()
     foreach ($k in ($cfg.Keys | Sort-Object)) { $lines += ('{0}={1}' -f $k, $cfg[$k]) }
-    Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding UTF8
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding UTF8 -ErrorAction Stop
+            break
+        } catch {
+            Start-Sleep -Milliseconds (40 * $attempt)
+        }
+    }
 }
 
 function Test-Tools {
@@ -354,9 +372,16 @@ function Format-Eta([double]$sec) {
     return ('{0}:{1:00}' -f [int][Math]::Floor($ts.TotalMinutes), $ts.Seconds)
 }
 function Limit-Text([string]$s, [int]$n) {
-    if ($null -eq $s) { return '' }
-    if ($s.Length -gt $n) { return $s.Substring(0, $n - 3) + '...' }
-    return $s
+    if ([string]::IsNullOrWhiteSpace($s)) { return '' }
+    $s = $s.Trim()
+    if ($s.Length -le $n) { return $s }
+    if ($n -le 3) { return $s.Substring(0, $n) }
+    $sub = $s.Substring(0, $n - 3)
+    $lastSpace = $sub.LastIndexOf(' ')
+    if ($lastSpace -gt ($n / 2)) {
+        return $sub.Substring(0, $lastSpace).TrimEnd(',', '.', ';', ':', '-', ' ', '!') + '...'
+    }
+    return $sub.TrimEnd() + '...'
 }
 function Format-Fraction([double]$f) {
     return ([Math]::Max(0.0, [Math]::Min(1.0, $f))).ToString('0.000', [Globalization.CultureInfo]::InvariantCulture)
@@ -406,6 +431,17 @@ function Initialize-Toast {
             } catch { Write-Log "AppUserModelId registration notice: $_" }
         }
 
+        # Ensure notifications and banners are explicitly enabled for ClipToast in Windows Settings
+        try {
+            $notifKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\ClipToast'
+            if (-not (Test-Path -LiteralPath $notifKey)) {
+                New-Item -Path $notifKey -Force | Out-Null
+            }
+            Set-ItemProperty -Path $notifKey -Name 'Enabled' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $notifKey -Name 'ShowBanners' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $notifKey -Name 'ShowInActionCenter' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+        } catch { Write-Log "Notification settings registration notice: $_" }
+
         if ($needProto) {
             try {
                 $protoKey = 'HKCU:\Software\Classes\cliptoast'
@@ -436,14 +472,30 @@ function Initialize-Toast {
     } catch { $script:ToastOK = $false; Write-Log "Toast init failed: $_" }
 }
 
-function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]$FolderPath = '', [string]$FilePath = '', [string]$ReportTag = '') {
+function Show-Toast(
+    [string]$Title,
+    [string]$Body,
+    [string]$Tag = 'ct',
+    [string]$FolderPath = '',
+    [string]$FilePath = '',
+    [string]$ReportTag = '',
+    [string]$CustomActionTitle = '',
+    [string]$CustomActionUri = '',
+    [switch]$IncludeLogAction
+) {
     if (-not $script:ToastOK) { return }
     if ([string]::IsNullOrWhiteSpace($Tag)) { $Tag = 'ct' + [guid]::NewGuid().ToString('N').Substring(0, 8) }
     try {
         $t = [Security.SecurityElement]::Escape($Title)
         $b = [Security.SecurityElement]::Escape($Body)
         $actionList = New-Object System.Collections.Generic.List[string]
-        if ($ReportTag) {
+        if ($CustomActionTitle -and $CustomActionUri) {
+            $actionList.Add("<action content='$([Security.SecurityElement]::Escape($CustomActionTitle))' arguments='$([Security.SecurityElement]::Escape($CustomActionUri))' activationType='protocol'/>")
+            if ($IncludeLogAction -and (Test-Path -LiteralPath $LogPath)) {
+                $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Item -LiteralPath $LogPath).FullName)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+                $actionList.Add("<action content='View log' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
+            }
+        } elseif ($ReportTag) {
             $actionList.Add("<action content='Report issue' arguments='cliptoast:report:$ReportTag' activationType='protocol'/>")
             if (Test-Path -LiteralPath $LogPath) {
                 $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Item -LiteralPath $LogPath).FullName)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
@@ -461,6 +513,9 @@ function Show-Toast([string]$Title, [string]$Body, [string]$Tag = 'ct', [string]
             }
             $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
             $actionList.Add("<action content='Open folder' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
+        } elseif ($IncludeLogAction -and (Test-Path -LiteralPath $LogPath)) {
+            $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Item -LiteralPath $LogPath).FullName)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+            $actionList.Add("<action content='View log' arguments='cliptoast:open:$fB64' activationType='protocol'/>")
         }
         $actions = ''
         if ($actionList.Count -gt 0) {
@@ -503,7 +558,6 @@ function Show-ProgressToast([string]$Tag, [string]$Headline, [string]$Title, [st
         $c = Read-Config
         $dPath = [string]$c['DownloadDir']
         if (-not $dPath) { $dPath = Join-Path (Join-Path $env:USERPROFILE 'Downloads') 'ClipToast Downloads' }
-        if (-not (Test-Path -LiteralPath $dPath)) { try { New-Item -ItemType Directory -Force -Path $dPath | Out-Null } catch {} }
         $fB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dPath)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
         $xml = @"
 <toast scenario="reminder">
@@ -576,7 +630,9 @@ function Invoke-AppUpdate {
         Write-Config $cfg
 
         if (-not $m.version -or -not $m.url -or -not $m.signature) { throw 'The update manifest is incomplete.' }
-        if ([version][string]$m.version -le [version]$AppVersion) { return @{ Status = 'current'; Version = $AppVersion } }
+        $cleanManifestVer = ([string]$m.version).TrimStart('v', 'V').Trim()
+        $cleanAppVer      = ([string]$AppVersion).TrimStart('v', 'V').Trim()
+        if ([version]$cleanManifestVer -le [version]$cleanAppVer) { return @{ Status = 'current'; Version = $AppVersion } }
         if ([string]$m.url -notlike 'https://*') { throw 'The update package URL must start with https://' }
 
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
@@ -621,6 +677,22 @@ function Invoke-AppUpdate {
         try { Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ClipToast' -Name DisplayVersion -Value $newVer -ErrorAction Stop } catch {}
         if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Recurse -Force -ErrorAction SilentlyContinue }
         Write-Log "Updated $AppVersion -> $newVer"
+
+        # If system tray was running, reload it so the new code is active immediately
+        try {
+            $trayMutex = $null
+            $isTrayRunning = [System.Threading.Mutex]::TryOpenExisting('Local\ClipToast_Tray_Mutex', [ref]$trayMutex)
+            if ($trayMutex) { $trayMutex.Dispose() }
+            if ($isTrayRunning) {
+                $launcher = Get-ClipToastLauncher
+                if ($launcher) {
+                    Start-Process -FilePath $launcher -ArgumentList '--stop' -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                    Start-Sleep -Milliseconds 400
+                    Start-ClipToastScript 'tray.ps1'
+                }
+            }
+        } catch {}
+
         return @{ Status = 'updated'; Version = $newVer; Notes = [string]$m.notes }
     } catch {
         Write-Log "Update check failed: $_"

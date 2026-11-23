@@ -2,16 +2,18 @@
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-# Single instance enforcement with AbandonedMutex resilience
-$mutexCreated = $false
+# Single instance enforcement with WaitOne timeout resilience for seamless auto-update restarts
+$mutex = $null
+$hasLock = $false
 try {
-    $mutex = New-Object System.Threading.Mutex($true, 'Local\ClipToast_Tray_Mutex', [ref]$mutexCreated)
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\ClipToast_Tray_Mutex')
+    $hasLock = $mutex.WaitOne(3000) # Wait up to 3 seconds for any exiting instance to release
 } catch [System.Threading.AbandonedMutexException] {
-    $mutexCreated = $true
+    $hasLock = $true
 } catch {
-    $mutexCreated = $false
+    $hasLock = $false
 }
-if (-not $mutexCreated) {
+if (-not $hasLock) {
     exit 0
 }
 
@@ -240,6 +242,8 @@ $pollTimer.Add_Tick({
             $pollTimer.Stop()
             $pollTimer.Dispose()
             if ($cleanTimer) { $cleanTimer.Stop(); $cleanTimer.Dispose() }
+            if ($updateTimer) { $updateTimer.Stop(); $updateTimer.Dispose() }
+            if ($initUpdateTimer) { $initUpdateTimer.Stop(); $initUpdateTimer.Dispose() }
             try { [ClipToastHotkeys]::Stop() } catch {}
             try {
                 $notifyIcon.Visible = $false
@@ -264,10 +268,72 @@ $cleanTimer.Add_Tick({
 })
 $cleanTimer.Start()
 
+# Periodic background idle auto-updater (checks every 30 minutes; triggers when elapsed > 6h for app, > 72h for yt-dlp)
+$script:CheckIdleUpdates = {
+    try {
+        $cfg = Read-Config
+        $nowUnix = Get-UnixNow
+        $lastAppCheck = [int64]0
+        $lastYtdlpCheck = [int64]0
+        [void][int64]::TryParse([string]$cfg['LastUpdateCheck'], [ref]$lastAppCheck)
+        [void][int64]::TryParse([string]$cfg['LastYtdlpUpdate'], [ref]$lastYtdlpCheck)
+
+        $needsAppCheck = ($cfg['AutoUpdate'] -ne '0' -and ($nowUnix - $lastAppCheck) -gt 21600)
+        $needsYtdlpCheck = (($nowUnix - $lastYtdlpCheck) -gt 259200)
+
+        if ($needsAppCheck -or $needsYtdlpCheck) {
+            if ($needsAppCheck) { $cfg['LastUpdateCheck'] = [string]$nowUnix }
+            if ($needsYtdlpCheck) { $cfg['LastYtdlpUpdate'] = [string]$nowUnix }
+            Write-Config $cfg
+
+            $bgCmds = New-Object System.Collections.Generic.List[string]
+            $safeAppDir = $AppDir.Replace("'", "''")
+            if ($needsAppCheck) {
+                $bgCmds.Add(". (Join-Path '$safeAppDir' 'common.ps1'); [void](Invoke-AppUpdate)")
+            }
+            if ($needsYtdlpCheck) {
+                $ytBin = Join-Path $Bin 'yt-dlp.exe'
+                if (Test-Path -LiteralPath $ytBin) {
+                    $safeYtBin = $ytBin.Replace("'", "''")
+                    $bgCmds.Add("try { & '$safeYtBin' -U 2>&1 | Out-Null } catch {}")
+                }
+            }
+            if ($bgCmds.Count -gt 0) {
+                Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+                    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ($bgCmds -join '; ')
+                ) -ErrorAction SilentlyContinue
+            }
+        }
+    } catch {
+        Write-Log "Tray idle update check failed: $_"
+    }
+}
+
+$updateTimer = New-Object System.Windows.Forms.Timer
+$updateTimer.Interval = 1800000 # 30 minutes
+$updateTimer.Add_Tick({
+    & $script:CheckIdleUpdates
+})
+$updateTimer.Start()
+
+# Initial update check shortly after tray startup (delayed 30s to allow system boot to settle)
+$initUpdateTimer = New-Object System.Windows.Forms.Timer
+$initUpdateTimer.Interval = 30000 # 30 seconds
+$initUpdateTimer.Add_Tick({
+    try {
+        $initUpdateTimer.Stop()
+        $initUpdateTimer.Dispose()
+    } catch {}
+    & $script:CheckIdleUpdates
+})
+$initUpdateTimer.Start()
+
 try {
     [System.Windows.Forms.Application]::Run()
 } finally {
     try { if ($cleanTimer) { $cleanTimer.Stop(); $cleanTimer.Dispose() } } catch {}
+    try { if ($updateTimer) { $updateTimer.Stop(); $updateTimer.Dispose() } } catch {}
+    try { if ($initUpdateTimer) { $initUpdateTimer.Stop(); $initUpdateTimer.Dispose() } } catch {}
     try { [ClipToastHotkeys]::Stop() } catch {}
     try {
         $notifyIcon.Visible = $false

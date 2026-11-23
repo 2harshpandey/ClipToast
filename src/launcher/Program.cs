@@ -15,13 +15,22 @@ using System.Windows.Forms;
 [assembly: AssemblyCopyright("Copyright (C) 2026 Harsh Pandey")]
 [assembly: AssemblyTrademark("ClipToast")]
 [assembly: AssemblyCulture("")]
-[assembly: AssemblyVersion("1.1.2.0")]
-[assembly: AssemblyFileVersion("1.1.2.0")]
+[assembly: AssemblyVersion("1.1.3.0")]
+[assembly: AssemblyFileVersion("1.1.3.0")]
 
 namespace ClipToastLauncher
 {
     internal static class Program
     {
+        private static readonly HashSet<string> AllowedScripts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "downloader.ps1",
+            "tray.ps1",
+            "settings.ps1",
+            "install-tools.ps1",
+            "action.ps1"
+        };
+
         [STAThread]
         private static int Main(string[] args)
         {
@@ -113,8 +122,17 @@ namespace ClipToastLauncher
                     }
                     else if (firstLower.EndsWith(".ps1"))
                     {
-                        script = first;
-                        for (int i = 1; i < args.Length; i++) psArgs.Add(args[i]);
+                        string leaf = Path.GetFileName(first);
+                        if (AllowedScripts.Contains(leaf))
+                        {
+                            script = leaf;
+                            for (int i = 1; i < args.Length; i++) psArgs.Add(args[i]);
+                        }
+                        else
+                        {
+                            // Defense: Reject arbitrary external scripts to prevent execution policy bypass proxying
+                            return 1;
+                        }
                     }
                     else
                     {
@@ -122,10 +140,21 @@ namespace ClipToastLauncher
                     }
                 }
 
+                // Security: Enforce that only whitelisted scripts from appDir or exeDir can ever be invoked
+                script = Path.GetFileName(script);
+                if (!AllowedScripts.Contains(script))
+                {
+                    script = "downloader.ps1";
+                }
+
                 string scriptPath = Path.Combine(appDir, script);
                 if (!File.Exists(scriptPath))
                 {
                     scriptPath = Path.Combine(exeDir, script);
+                }
+                if (!File.Exists(scriptPath))
+                {
+                    return 1;
                 }
 
                 string sysDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
@@ -139,19 +168,7 @@ namespace ClipToastLauncher
 
                 foreach (string arg in psArgs)
                 {
-                    cmd.Append(" ");
-                    if (arg.StartsWith("-") && !arg.Contains(" ") && !arg.Contains("&"))
-                    {
-                        cmd.Append(arg);
-                    }
-                    else if (!arg.StartsWith("\"") || !arg.EndsWith("\""))
-                    {
-                        cmd.Append("\"").Append(arg.Replace("\"", "\\\"")).Append("\"");
-                    }
-                    else
-                    {
-                        cmd.Append(arg);
-                    }
+                    cmd.Append(" ").Append(QuoteArgument(arg));
                 }
 
                 bool isConsole = (script == "install-tools.ps1" && (psArgs.Contains("-FromInstaller") || psArgs.Contains("-Force")));
@@ -171,6 +188,41 @@ namespace ClipToastLauncher
                 MessageBox.Show("ClipToast launcher error: " + ex.Message, "ClipToast", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
+        }
+
+        private static string QuoteArgument(string arg)
+        {
+            if (string.IsNullOrEmpty(arg)) return "\"\"";
+            if (arg.StartsWith("-") && !arg.Contains(" ") && !arg.Contains("&") && !arg.Contains(";") && !arg.Contains("|") && !arg.Contains("\""))
+            {
+                return arg;
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.Append('"');
+            int backslashes = 0;
+            foreach (char c in arg)
+            {
+                if (c == '\\')
+                {
+                    backslashes++;
+                }
+                else
+                {
+                    if (c == '"')
+                    {
+                        sb.Append('\\', backslashes * 2 + 1);
+                    }
+                    else
+                    {
+                        sb.Append('\\', backslashes);
+                    }
+                    backslashes = 0;
+                    sb.Append(c);
+                }
+            }
+            sb.Append('\\', backslashes * 2);
+            sb.Append('"');
+            return sb.ToString();
         }
     }
 }

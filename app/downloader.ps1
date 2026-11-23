@@ -74,11 +74,13 @@ if ($needsAppCheck -or $needsYtdlpCheck) {
     Write-Config $cfg
 
     $bgCmds = New-Object System.Collections.Generic.List[string]
+    $safeAppDir = $AppDir.Replace("'", "''")
     if ($needsAppCheck) {
-        $bgCmds.Add(". (Join-Path '$AppDir' 'common.ps1'); [void](Invoke-AppUpdate)")
+        $bgCmds.Add(". (Join-Path '$safeAppDir' 'common.ps1'); [void](Invoke-AppUpdate)")
     }
     if ($needsYtdlpCheck) {
-        $bgCmds.Add("try { & '$yt' -U 2>&1 | Out-Null } catch {}")
+        $safeYt = $yt.Replace("'", "''")
+        $bgCmds.Add("try { & '$safeYt' -U 2>&1 | Out-Null } catch {}")
     }
     try {
         Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
@@ -89,11 +91,13 @@ if ($needsAppCheck -or $needsYtdlpCheck) {
 
 # ---------- 3. validate link ----------
 if (-not $url) {
-    $clip = Get-Clipboard -Raw
-    $m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
-    if ($m.Success) {
-        $url = $m.Value.TrimEnd('.', ',', ')', ']', ';', "'", '"')
-    }
+    try {
+        $clip = Get-Clipboard -Raw
+        $m = [regex]::Match([string]$clip, 'https?://[^\s"<>]+')
+        if ($m.Success) {
+            $url = $m.Value.TrimEnd('.', ',', ')', ']', ';', "'", '"')
+        }
+    } catch {}
 }
 if (-not $url) {
     Show-Toast 'ClipToast' 'No link found in clipboard. Copy a YouTube, Instagram, or media link first, then try again.' $tag
@@ -105,17 +109,19 @@ Write-Log "START url=$url AudioOnly=$AudioOnly"
 $nowUnix = Get-UnixNow
 $duplicateFound = $false
 try {
-    Get-ChildItem -Path $env:TEMP -Filter "cliptoast_task_*.json" -ErrorAction SilentlyContinue | ForEach-Object {
+    $taskFiles = Get-ChildItem -Path $env:TEMP -Filter "cliptoast_task_*.json" -ErrorAction SilentlyContinue
+    foreach ($tf in $taskFiles) {
         try {
-            $tData = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            $tData = Get-Content -LiteralPath $tf.FullName -Raw | ConvertFrom-Json
             $p = if ($tData.pid) { Get-Process -Id $tData.pid -ErrorAction SilentlyContinue } else { $null }
             if ($p -and $tData.pid -ne $PID -and $tData.url -eq $url -and [bool]$tData.audioOnly -eq [bool]$AudioOnly) {
                 if (($nowUnix - [int64]$tData.time) -lt 4) {
                     $duplicateFound = $true
+                    break
                 }
             } elseif (-not $p) {
                 # Clean up leftover task file from terminated process
-                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $tf.FullName -Force -ErrorAction SilentlyContinue
             }
         } catch {}
     }
@@ -517,7 +523,7 @@ function Invoke-InstagramPhotoFallback([string]$PostUrl, [string]$WorkDir, [stri
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             } else {
                 $mp4File = Join-Path $WorkDir "$cleanTitle.mp4"
-                & $ffmpeg -y @ffAudioArgs -i $audioFile -loop 1 -i $downloadedImages[0] -c:v libx264 -tune stillimage -preset ultrafast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart $mp4File 2>&1 | Out-Null
+                & $ffmpeg -y @ffAudioArgs -i $audioFile -loop 1 -i $downloadedImages[0] -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -tune stillimage -preset ultrafast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest -movflags +faststart $mp4File 2>&1 | Out-Null
                 Remove-Item -LiteralPath $audioFile -Force -ErrorAction SilentlyContinue
             }
         }
@@ -587,24 +593,47 @@ if ($script:ytCode -ne 0) {
     $platform = 'media link'
     try { $platform = ([System.Uri]$url).Host } catch {}
 
-    # Check for site-specific authentication or session expiration errors
-    $isAuthError = ($script:ytLines | Where-Object { 
-        $_ -match 'Sign in to confirm your age|login_required|checkpoint_required|Please log in|confirm you are not a bot|Members-only content|This video is private|requires authentication|HTTP Error 401|HTTP Error 403' 
-    })
-    if ($isAuthError) {
-        $siteName = 'this site'
-        if ($url -match 'instagram\.com') { $siteName = 'Instagram' }
-        elseif ($url -match 'youtube\.com|youtu\.be') { $siteName = 'YouTube' }
-        elseif ($url -match 'tiktok\.com') { $siteName = 'TikTok' }
-        elseif ($url -match 'reddit\.com') { $siteName = 'Reddit' }
-        elseif ($url -match 'twitter\.com|x\.com') { $siteName = 'Twitter/X' }
-        
-        $authMsg = "Session expired or login required for $siteName. Please re-export cookies in browser and merge in Settings."
-        Write-Log "AUTH EXPIRED/REQUIRED: $siteName - $err"
-        Show-Toast "$siteName Session Required" $authMsg $tag '' '' $tag
-        exit 1
+    $allLogs = ($script:ytLines -join "`n")
+
+    # Friendly platform identification
+    $siteName = 'Media platform'
+    if ($url -match 'instagram\.com') { $siteName = 'Instagram' }
+    elseif ($url -match 'youtube\.com|youtu\.be') { $siteName = 'YouTube' }
+    elseif ($url -match 'tiktok\.com') { $siteName = 'TikTok' }
+    elseif ($url -match 'reddit\.com') { $siteName = 'Reddit' }
+    elseif ($url -match 'twitter\.com|x\.com') { $siteName = 'Twitter/X' }
+    elseif ($url -match 'facebook\.com|fb\.watch') { $siteName = 'Facebook' }
+    elseif ($url -match 'pinterest\.com') { $siteName = 'Pinterest' }
+    elseif ($url -match 'threads\.net') { $siteName = 'Threads' }
+    elseif ($url -match 'twitch\.tv') { $siteName = 'Twitch' }
+    elseif ($url -match 'vimeo\.com') { $siteName = 'Vimeo' }
+    elseif ($url -match 'soundcloud\.com') { $siteName = 'SoundCloud' }
+    else {
+        try {
+            $h = ([System.Uri]$url).Host -replace '^www\.', ''
+            if ($h) { $siteName = $h }
+        } catch {}
     }
 
+    # Category 1: Authentication / Login / Bot Check / Cookies Required
+    $isAuth = ($allLogs -match 'empty media response|without being logged-in|login_required|checkpoint_required|Please log in|Login required|confirm your age|not a bot|granted access|Members-only content|Join this channel|requires authentication|This video is private|This post is private|private account|HTTP Error 401|HTTP Error 403: Forbidden|cookies-from-browser|pass cookies to yt-dlp|login required')
+
+    # Category 2: Content Unavailable / Deleted / Geo-Blocked / Private
+    $isUnavailable = ($allLogs -match 'Video unavailable|This video is unavailable|This video has been removed|Post not found|HTTP Error 404|404 Not Found|not found on this server|content is not available|has been deleted|The playlist does not exist|not available in your country|not available in your region|geo-restricted|blocked in your country')
+
+    # Category 3: Rate Limiting / Temporary Bot Block
+    $isRateLimit = ($allLogs -match 'HTTP Error 429|Too Many Requests|Rate limit exceeded|Too many requests from this IP|Temporary block|challenge required|blocked by Cloudflare|Cloudflare anti-bot')
+
+    # Category 4: Network / Connection / DNS Failures
+    $isNetwork = ($allLogs -match 'Unable to download webpage|Temporary failure in name resolution|timed out|The read operation timed out|Network is unreachable|Connection refused|Failed to resolve|getaddrinfo failed|WinError 10060|WinError 10061|RemoteDisconnected|ConnectionResetError')
+
+    # Category 5: Live Stream Still In Progress
+    $isLive = ($allLogs -match 'is a live stream|This live event will begin in|The live event has not started|Premieres in')
+
+    # Category 6: Format Unavailable / Unsupported URL
+    $isFormatErr = ($allLogs -match 'Requested format is not available|No video formats found|Unsupported URL')
+
+    # Prepare anonymous error diagnostics in case user ever views log or reports genuine bug
     $userPattern = [regex]::Escape($env:USERNAME)
     $profilePattern = [regex]::Escape($env:USERPROFILE)
     $rawLogs = ($script:ytLines | Select-Object -Last 25) -join "`n"
@@ -623,7 +652,63 @@ if ($script:ytCode -ne 0) {
     } catch {}
 
     Write-Log "DOWNLOAD FAILED: $err"
-    Show-Toast 'Download failed' (Limit-Text $err 130) $tag '' '' $tag
+
+    if ($isAuth) {
+        $authTitle = "$siteName Login Required"
+        $authBody = if ($url -match 'instagram\.com') {
+            "Instagram blocked guest access for this reel. Click Open Settings to connect your browser cookies."
+        } elseif ($url -match 'youtube\.com|youtu\.be') {
+            "This video requires YouTube sign-in (age-gated or bot verification). Click Open Settings to connect cookies."
+        } else {
+            "$siteName requires a logged-in account or cookies for this media. Click Open Settings to connect cookies."
+        }
+        Show-Toast $authTitle $authBody $tag '' '' '' 'Open Settings' 'cliptoast:settings' -IncludeLogAction
+        exit 1
+    }
+
+    if ($isRateLimit) {
+        $rateTitle = "$siteName Rate Limited"
+        $rateBody = "Too many requests sent to $siteName. Wait a few minutes or connect your browser cookies in Settings."
+        Show-Toast $rateTitle $rateBody $tag '' '' '' 'Open Settings' 'cliptoast:settings' -IncludeLogAction
+        exit 1
+    }
+
+    if ($isUnavailable) {
+        $unavailTitle = "$siteName Content Unavailable"
+        $unavailBody = if ($allLogs -match 'not available in your country|not available in your region|geo-restricted|blocked in your country') {
+            "This content is geo-restricted and unavailable in your region."
+        } else {
+            "This content was removed, deleted, or made private by the creator."
+        }
+        Show-Toast $unavailTitle $unavailBody $tag '' '' '' '' '' -IncludeLogAction
+        exit 1
+    }
+
+    if ($isNetwork) {
+        $netTitle = "Connection Failed"
+        $netBody = "Could not connect to $siteName. Please check your internet connection."
+        Show-Toast $netTitle $netBody $tag '' '' '' '' '' -IncludeLogAction
+        exit 1
+    }
+
+    if ($isLive) {
+        $liveTitle = "Live Stream in Progress"
+        $liveBody = "Live streams and upcoming premieres cannot be downloaded until finished."
+        Show-Toast $liveTitle $liveBody $tag '' '' '' '' '' -IncludeLogAction
+        exit 1
+    }
+
+    if ($isFormatErr) {
+        $fmtTitle = "Format Unavailable"
+        $fmtBody = "No downloadable media stream was found for this link. Try copying again or updating yt-dlp in Settings."
+        Show-Toast $fmtTitle $fmtBody $tag '' '' $tag
+        exit 1
+    }
+
+    # Fallback: genuine unexpected error or extractor bug
+    $cleanErr = $err -replace '^\[[^\]]+\]\s*[^:]+:\s*', ''
+    $cleanErr = Limit-Text $cleanErr 120
+    Show-Toast 'Download failed' $cleanErr $tag '' '' $tag
     exit 1
 }
 
@@ -815,6 +900,9 @@ if ($saved.Count -eq 0) {
     Show-Toast $title ("{0}{1}  ({2})" -f (Limit-Text ([IO.Path]::GetFileName($mainFile)) 75), $subLabel, $size) $tag $dest $mainFile
 }
 Write-Log ('DONE ' + ($saved -join ' | '))
+} catch {
+    Write-Log "DOWNLOAD UNHANDLED EXCEPTION: $_"
+    Show-Toast 'Download failed' 'An unexpected error occurred while saving the media. Open Settings -> View log for details.' $tag -IncludeLogAction
 } finally {
     if ($Work) {
         [void](Remove-WorkDirectoryRobust $Work 0)

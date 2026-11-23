@@ -35,9 +35,22 @@ if ($Uri -like 'cliptoast:cancel:*') {
             $targetPid = if ($task.pid) { [int]$task.pid } else { 0 }
             $workPath = if ($task.work) { [string]$task.work } else { '' }
 
-            Write-Log ("Cancelling task tag $tag (PID: $targetPid, Work: $workPath)")
+            # Security verification: Ensure targetPid belongs to a living PowerShell or ClipToast process
+            $safePid = 0
+            if ($targetPid -gt 0) {
+                try {
+                    $p = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+                    if ($p -and ($p.ProcessName -like '*powershell*' -or $p.ProcessName -like '*ClipToast*')) {
+                        $safePid = $targetPid
+                    } else {
+                        Write-Log "Cancel skipped unverified or non-ClipToast PID: $targetPid"
+                    }
+                } catch {}
+            }
+
+            Write-Log ("Cancelling task tag $tag (PID: $safePid, Work: $workPath)")
             # Terminate downloader process tree and robustly clean up all files and work directory
-            [void](Remove-WorkDirectoryRobust $workPath $targetPid)
+            [void](Remove-WorkDirectoryRobust $workPath $safePid)
         } catch {
             Write-Log "Cancel task error: $_"
         } finally {
@@ -53,7 +66,8 @@ if ($Uri -like 'cliptoast:open:*') {
     $b64 = $Uri.Substring('cliptoast:open:'.Length)
     try {
         $path = From-SafeBase64 $b64
-        if ($path) {
+        # Security validation: Path must strictly be a local drive path to prevent UNC NetNTLM hash leakage
+        if ($path -and ($path -match '^[a-zA-Z]:[\\/]') -and -not ($path.StartsWith('\\') -or $path.StartsWith('//'))) {
             if (Test-Path -LiteralPath $path) {
                 $item = Get-Item -LiteralPath $path
                 if ($item -is [System.IO.DirectoryInfo]) {
@@ -65,10 +79,12 @@ if ($Uri -like 'cliptoast:open:*') {
             } else {
                 # Fallback: if file was moved or renamed, open the parent directory
                 $parent = Split-Path -Parent $path
-                if ($parent -and (Test-Path -LiteralPath $parent)) {
+                if ($parent -and ($parent -match '^[a-zA-Z]:[\\/]') -and (Test-Path -LiteralPath $parent)) {
                     Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $parent)
                 }
             }
+        } else {
+            Write-Log "Open blocked: disallowed or UNC path format: $path"
         }
     } catch {
         Write-Log "Open error: $_"
@@ -81,16 +97,20 @@ if ($Uri -like 'cliptoast:play:*') {
     $b64 = $Uri.Substring('cliptoast:play:'.Length)
     try {
         $path = From-SafeBase64 $b64
-        # Security validation: Path must exist, cannot be a directory, and MUST have a recognized media extension
-        if ($path -and (Test-Path -LiteralPath $path)) {
-            $item = Get-Item -LiteralPath $path
-            $ext = $item.Extension.ToLower()
-            $allowedMediaExts = @('.mp4', '.mp3', '.mkv', '.webm', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.opus', '.mov')
-            if ($ext -in $allowedMediaExts -and -not ($item -is [System.IO.DirectoryInfo])) {
-                Invoke-Item -LiteralPath $item.FullName
-            } else {
-                Write-Log "Play blocked: non-media extension $ext on $path"
+        # Security validation: Path must be a local drive path, exist, cannot be a directory, and MUST have a recognized media extension
+        if ($path -and ($path -match '^[a-zA-Z]:[\\/]') -and -not ($path.StartsWith('\\') -or $path.StartsWith('//'))) {
+            if (Test-Path -LiteralPath $path) {
+                $item = Get-Item -LiteralPath $path
+                $ext = $item.Extension.ToLower()
+                $allowedMediaExts = @('.mp4', '.mp3', '.mkv', '.webm', '.m4a', '.aac', '.flac', '.wav', '.ogg', '.opus', '.mov')
+                if ($ext -in $allowedMediaExts -and -not ($item -is [System.IO.DirectoryInfo])) {
+                    Invoke-Item -LiteralPath $item.FullName
+                } else {
+                    Write-Log "Play blocked: non-media extension $ext on $path"
+                }
             }
+        } else {
+            Write-Log "Play blocked: disallowed or UNC path format: $path"
         }
     } catch {
         Write-Log "Play error: $_"
@@ -99,7 +119,13 @@ if ($Uri -like 'cliptoast:play:*') {
 }
 
 
-# 4. Action: Anonymous Error Report via GitHub Issues
+# 4. Action: Open Settings
+if ($Uri -like 'cliptoast:settings*') {
+    Start-ClipToastScript 'settings.ps1'
+    exit 0
+}
+
+# 5. Action: Anonymous Error Report via GitHub Issues
 if ($Uri -like 'cliptoast:report:*') {
     $rawTag = $Uri.Substring('cliptoast:report:'.Length).Trim()
     $tag = [regex]::Replace($rawTag, '[^a-zA-Z0-9_-]', '')
@@ -123,8 +149,18 @@ if ($Uri -like 'cliptoast:report:*') {
     } catch {}
 
     $errSummary = if ($lastErr -and $lastErr.error) { [string]$lastErr.error } else { 'Media download encountered an unrecoverable failure.' }
+    $errSummary = Limit-Text $errSummary 200
     $platform = if ($lastErr -and $lastErr.platform) { [string]$lastErr.platform } else { 'Media platform' }
     $sanitizedLogs = if ($lastErr -and $lastErr.logs) { [string]$lastErr.logs } else { 'No detailed logs available.' }
+
+    # Security & Compatibility: Cap log output to last 10 lines and maximum 900 chars so the complete GET URL stays strictly below 1,800 characters
+    $logLines = $sanitizedLogs -split "`n"
+    if ($logLines.Count -gt 10) {
+        $sanitizedLogs = ($logLines | Select-Object -Last 10) -join "`n"
+    }
+    if ($sanitizedLogs.Length -gt 900) {
+        $sanitizedLogs = $sanitizedLogs.Substring($sanitizedLogs.Length - 900)
+    }
 
     $title = "[Bug] Download failed on $platform"
     $title = Limit-Text $title 70

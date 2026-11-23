@@ -1,7 +1,7 @@
 # build.ps1 - build launcher, (optional) download dependencies, and compile NSIS installer
 param(
     [switch]$BundleTools,
-    [string]$Version = '1.1.2'
+    [string]$Version = '1.1.3'
 )
 $ErrorActionPreference = 'Stop'
 $rootDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -53,9 +53,10 @@ if (-not $makensis) {
 
 $installerExe = Join-Path $outDir ("ClipToastSetup-v$Version.exe")
 if ($makensis) {
-    Write-Host "   Found NSIS at: $($makensis.FullName)" -ForegroundColor Green
+    $makensisPath = if ($makensis -is [System.IO.FileInfo]) { $makensis.FullName } else { $makensis.Source }
+    Write-Host "   Found NSIS at: $makensisPath" -ForegroundColor Green
     Write-Host "   Building installer: $installerExe ..." -ForegroundColor Cyan
-    & $makensis.FullName "/DOUT_FILE=$installerExe" "/DAPP_VERSION=$Version" (Join-Path $rootDir 'installer.nsi')
+    & $makensisPath "/DOUT_FILE=$installerExe" "/DAPP_VERSION=$Version" (Join-Path $rootDir 'installer.nsi')
     if ($LASTEXITCODE -ne 0) { throw "NSIS build failed with exit code $LASTEXITCODE" }
     Write-Host "   Installer built successfully: $installerExe" -ForegroundColor Green
 } else {

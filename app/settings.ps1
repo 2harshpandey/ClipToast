@@ -280,6 +280,26 @@ $btnCheck = New-Object System.Windows.Forms.Button
 $btnCheck.Text = 'Check for updates'; $btnCheck.Location = New-Object System.Drawing.Point(20, 450); $btnCheck.Size = New-Object System.Drawing.Size(140, 28)
 $form.Controls.Add($btnCheck)
 
+$btnTestToast = New-Object System.Windows.Forms.Button
+$btnTestToast.Text = 'Test Notification'; $btnTestToast.Location = New-Object System.Drawing.Point(170, 450); $btnTestToast.Size = New-Object System.Drawing.Size(130, 28)
+$btnTestToast.Add_Click({
+    Initialize-Toast
+    $notifKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\ClipToast'
+    $enabled = $true
+    try {
+        $val = (Get-ItemProperty -Path $notifKey -Name 'Enabled' -ErrorAction SilentlyContinue).Enabled
+        if ($val -eq 0) { $enabled = $false }
+    } catch {}
+
+    Show-Toast 'ClipToast Notification Test' 'If you see this popup, your Windows notifications are working perfectly!'
+    if (-not $enabled) {
+        [void][System.Windows.Forms.MessageBox]::Show("Note: Notifications for ClipToast were previously disabled in Windows Settings.`n`nClipToast has re-enabled them, but if no popup appeared, please check Windows Settings -> System -> Notifications.", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    } else {
+        [void][System.Windows.Forms.MessageBox]::Show("Test notification dispatched!`n`nA toast popup should appear on your screen.`n`nIf no popup appeared, check Windows Settings -> System -> Notifications (or Focus Assist / Do Not Disturb).", "ClipToast", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
+})
+$form.Controls.Add($btnTestToast)
+
 $btnSave = New-Object System.Windows.Forms.Button
 $btnSave.Text = 'Save'; $btnSave.Location = New-Object System.Drawing.Point(330, 450); $btnSave.Size = New-Object System.Drawing.Size(80, 28)
 $form.Controls.Add($btnSave)
