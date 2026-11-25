@@ -1,4 +1,4 @@
-# common.ps1 - shared helpers, dot-sourced by the other scripts
+﻿# common.ps1 - shared helpers, dot-sourced by the other scripts
 $AppDir     = $PSScriptRoot
 $Root       = Split-Path -Parent $AppDir
 $InstallDir = $Root
@@ -25,7 +25,7 @@ function Get-ClipToastLauncher {
     return $null
 }
 $ToastAppId = 'ClipToast'
-$AppVersion = '1.1.3'
+$AppVersion = '1.1.4'
 try { $AppVersion = (Get-Content -LiteralPath (Join-Path $AppDir 'version.txt') -Raw).Trim() } catch {}
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 $ProgressPreference = 'SilentlyContinue'
@@ -240,6 +240,41 @@ function Test-Tools {
 }
 
 # ---------------- cookies management ----------------
+function Remove-FileBomIfPresent([string]$FilePath) {
+    if (-not $FilePath -or -not (Test-Path -LiteralPath $FilePath)) { return $true }
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            $cleanBytes = New-Object byte[] ($bytes.Length - 3)
+            [System.Array]::Copy($bytes, 3, $cleanBytes, 0, $cleanBytes.Length)
+            [System.IO.File]::WriteAllBytes($FilePath, $cleanBytes)
+        }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Add-CookieLinesToMap($CookieMap, [string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return 0 }
+    $added = 0
+    foreach ($line in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $t = $line.TrimStart([char]0xFEFF).Trim()
+        if (-not $t) { continue }
+        if ($t.StartsWith('#') -and -not $t.StartsWith('#HttpOnly_', [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+        $parts = $t -split "`t"
+        if ($parts.Count -ge 7 -and -not [string]::IsNullOrWhiteSpace($parts[0]) -and -not [string]::IsNullOrWhiteSpace($parts[5])) {
+            # Key uniquely identifies cookie: Domain + Path + Name
+            $domKey = ($parts[0] -replace '(?i)^#HttpOnly_', '').ToLower()
+            $key = "$domKey|$($parts[2])|$($parts[5])"
+            $CookieMap[$key] = $t
+            $added++
+        }
+    }
+    return $added
+}
+
 function Merge-CookieFiles([string]$ExistingPath, [string]$NewPath, [string]$OutputPath) {
     $cookieMap = [System.Collections.Specialized.OrderedDictionary]::new([System.StringComparer]::OrdinalIgnoreCase)
     $headerLines = New-Object System.Collections.Generic.List[string]
@@ -247,29 +282,13 @@ function Merge-CookieFiles([string]$ExistingPath, [string]$NewPath, [string]$Out
     $headerLines.Add('# Merged by ClipToast')
 
     # Load existing cookies if present
-    if ($ExistingPath -and (Test-Path -LiteralPath $ExistingPath)) {
-        foreach ($line in (Get-Content -LiteralPath $ExistingPath -Encoding UTF8)) {
-            $t = $line.Trim()
-            if (-not $t -or $t.StartsWith('#')) { continue }
-            $parts = $t -split "`t"
-            if ($parts.Count -ge 7) {
-                # Key uniquely identifies cookie: Domain + Path + Name
-                $key = "$($parts[0].ToLower())|$($parts[2])|$($parts[5])"
-                $cookieMap[$key] = $t
-            }
-        }
-    }
+    [void](Add-CookieLinesToMap $cookieMap $ExistingPath)
 
     # Merge/override with new cookies
     if ($NewPath -and (Test-Path -LiteralPath $NewPath)) {
-        foreach ($line in (Get-Content -LiteralPath $NewPath -Encoding UTF8)) {
-            $t = $line.Trim()
-            if (-not $t -or $t.StartsWith('#')) { continue }
-            $parts = $t -split "`t"
-            if ($parts.Count -ge 7) {
-                $key = "$($parts[0].ToLower())|$($parts[2])|$($parts[5])"
-                $cookieMap[$key] = $t
-            }
+        $newCount = Add-CookieLinesToMap $cookieMap $NewPath
+        if ($newCount -eq 0) {
+            throw "No valid Netscape cookies found in the selected file. Please export cookies.txt in Netscape format."
         }
     }
 
@@ -281,7 +300,8 @@ function Merge-CookieFiles([string]$ExistingPath, [string]$NewPath, [string]$Out
 
     $outDir = Split-Path -Parent $OutputPath
     if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
-    [System.IO.File]::WriteAllLines($OutputPath, $outLines, [System.Text.Encoding]::UTF8)
+    # Python's MozillaCookieJar (used by yt-dlp) fails to recognize the header if a UTF-8 BOM is present
+    [System.IO.File]::WriteAllLines($OutputPath, $outLines, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Get-ActiveCookieDomains([string]$CookiePath) {
@@ -308,11 +328,13 @@ function Get-ActiveCookieDomains([string]$CookiePath) {
     }
 
     foreach ($line in (Get-Content -LiteralPath $CookiePath -Encoding UTF8)) {
-        $t = $line.Trim()
-        if (-not $t -or $t.StartsWith('#')) { continue }
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $t = $line.TrimStart([char]0xFEFF).Trim()
+        if (-not $t) { continue }
+        if ($t.StartsWith('#') -and -not $t.StartsWith('#HttpOnly_', [System.StringComparison]::OrdinalIgnoreCase)) { continue }
         $parts = $t -split "`t"
         if ($parts.Count -ge 7) {
-            $domain = $parts[0].TrimStart('.')
+            $domain = ($parts[0] -replace '(?i)^#HttpOnly_', '').TrimStart('.')
             $expiry = [int64]0
             [void][int64]::TryParse($parts[4], [ref]$expiry)
             if ($expiry -ne 0 -and $expiry -le $nowUnix) { continue }

@@ -5,7 +5,7 @@ Unicode true
   !define APP_NAME "ClipToast"
 !endif
 !ifndef APP_VERSION
-  !define APP_VERSION "1.1.3"
+  !define APP_VERSION "1.1.4"
 !endif
 !ifndef UPDATE_URL
   !define UPDATE_URL "https://github.com/2harshpandey/ClipToast/releases/latest/download/latest.json"
@@ -20,22 +20,24 @@ Unicode true
 
 Name "${APP_NAME}"
 !ifndef OUT_FILE
-  !define OUT_FILE "release\ClipToastSetup-v1.1.3.exe"
+  !define OUT_FILE "release\ClipToastSetup-v1.1.4.exe"
 !endif
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\ClipToast"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+ManifestSupportedOS all
+ManifestDPIAware true
+SetCompressor zlib
 CRCCheck on
 BrandingText "${APP_NAME} ${APP_VERSION}"
-VIProductVersion "1.1.3.0"
+VIProductVersion "1.1.4.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} - Seamless Windows Clipboard Media Downloader"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 ClipToast"
 VIAddVersionKey "CompanyName" "ClipToast"
-VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.3.exe"
+VIAddVersionKey "OriginalFilename" "ClipToastSetup-v1.1.4.exe"
 
 Var DownloadDir
 

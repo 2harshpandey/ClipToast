@@ -21,7 +21,7 @@ if (-not $Version) {
     if (Test-Path -LiteralPath $verFile) {
         $Version = (Get-Content -LiteralPath $verFile -Raw).Trim()
     } else {
-        throw "Version parameter is required (e.g. -Version 1.1.3)"
+        throw "Version parameter is required (e.g. -Version 1.1.4)"
     }
 }
 if (-not $OutDir) { $OutDir = Join-Path $scriptDir 'release' }

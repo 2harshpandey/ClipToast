@@ -2,7 +2,7 @@
 
 [![Windows 11](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white)](https://github.com/2harshpandey/ClipToast)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version 1.1.3](https://img.shields.io/badge/Version-1.1.3-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
+[![Version 1.1.4](https://img.shields.io/badge/Version-1.1.4-blue.svg)](https://github.com/2harshpandey/ClipToast/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/2harshpandey/ClipToast?style=flat&logo=github)](https://github.com/2harshpandey/ClipToast/stargazers)
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-ClipToast-0078D6?logo=alternativeto&logoColor=white)](https://alternativeto.net/software/cliptoast/)
 [![Powered by yt-dlp](https://img.shields.io/badge/Engine-yt--dlp-red.svg)](https://github.com/yt-dlp/yt-dlp)
@@ -84,14 +84,14 @@ Modern Chromium browsers on Windows lock cookies with App-Bound Encryption. To u
 ## Installation & Download
 
 ### Windows Installer
-1. Download [ClipToastSetup-v1.1.3.exe](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToastSetup-v1.1.3.exe) from [Releases](https://github.com/2harshpandey/ClipToast/releases).
+1. Download [ClipToastSetup-v1.1.4.exe](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToastSetup-v1.1.4.exe) from [Releases](https://github.com/2harshpandey/ClipToast/releases).
 2. Run the installer (no administrator privileges required).
 3. The installer configures all media tools (`yt-dlp`, `FFmpeg`, `Deno`) automatically and adds ClipToast to your system tray.
 
 *(If Windows SmartScreen appears on first run because ClipToast is independent and open-source, click **More info** → **Run anyway**).*
 
 ### Portable Version
-1. Download [ClipToast-v1.1.3-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.3-portable.zip).
+1. Download [ClipToast-v1.1.4-portable.zip](https://github.com/2harshpandey/ClipToast/releases/latest/download/ClipToast-v1.1.4-portable.zip).
 2. Extract the archive anywhere and run `ClipToast.exe`.
 
 ---

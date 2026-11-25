@@ -223,6 +223,19 @@ foreach ($cf in $candidateCookieFiles) {
 
 $cookieArgs = @()
 if ($cookieFile) {
+    if (-not (Remove-FileBomIfPresent $cookieFile)) {
+        # Fallback if original cookies.txt is read-only: write BOM-free copy inside isolated temp $Work dir
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($cookieFile)
+            $workCookie = Join-Path $Work 'cookies.txt'
+            if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+                $cleanBytes = New-Object byte[] ($bytes.Length - 3)
+                [System.Array]::Copy($bytes, 3, $cleanBytes, 0, $cleanBytes.Length)
+                [System.IO.File]::WriteAllBytes($workCookie, $cleanBytes)
+                $cookieFile = $workCookie
+            }
+        } catch {}
+    }
     $cookieArgs = @('--cookies', $cookieFile)
     Write-Log "Using cookies file: $cookieFile"
 } elseif ($cfg['CookiesBrowser']) {
@@ -570,7 +583,8 @@ if ($script:ytCode -ne 0) {
     }
 }
 
-if ($script:ytCode -ne 0) {
+$isInvalidCookieFormat = ($script:ytLines | Where-Object { $_ -match 'does not look like a Netscape format cookies file' })
+if ($script:ytCode -ne 0 -and -not $isInvalidCookieFormat) {
     Write-Log 'First attempt failed - updating yt-dlp and retrying'
     Update-ProgressToast $tag 'Retrying...' $script:vTitle 'indeterminate' '' 'Updating the downloader engine'
     try { & $yt -U 2>&1 | Out-Null } catch {}
@@ -615,7 +629,8 @@ if ($script:ytCode -ne 0) {
         } catch {}
     }
 
-    # Category 1: Authentication / Login / Bot Check / Cookies Required
+    # Category 1: Authentication / Login / Bot Check / Cookies Required / Invalid Cookie Format
+    $isBadCookies = ($allLogs -match 'does not look like a Netscape format cookies file')
     $isAuth = ($allLogs -match 'empty media response|without being logged-in|login_required|checkpoint_required|Please log in|Login required|confirm your age|not a bot|granted access|Members-only content|Join this channel|requires authentication|This video is private|This post is private|private account|HTTP Error 401|HTTP Error 403: Forbidden|cookies-from-browser|pass cookies to yt-dlp|login required')
 
     # Category 2: Content Unavailable / Deleted / Geo-Blocked / Private
@@ -653,14 +668,32 @@ if ($script:ytCode -ne 0) {
 
     Write-Log "DOWNLOAD FAILED: $err"
 
+    if ($isBadCookies) {
+        Show-Toast "Invalid Cookies File" "Your imported cookies.txt is not in valid Netscape format. Open Settings to re-import or clear it." $tag '' '' '' 'Open Settings' 'cliptoast:settings' -IncludeLogAction
+        exit 1
+    }
+
     if ($isAuth) {
+        $hasCookies = ($cookieArgs.Count -gt 0)
         $authTitle = "$siteName Login Required"
         $authBody = if ($url -match 'instagram\.com') {
-            "Instagram blocked guest access for this reel. Click Open Settings to connect your browser cookies."
+            if ($hasCookies) {
+                "Instagram rejected your cookies or this post is private/expired. Click Open Settings to re-import fresh cookies."
+            } else {
+                "Instagram blocked guest access for this post. Click Open Settings to connect your browser cookies."
+            }
         } elseif ($url -match 'youtube\.com|youtu\.be') {
-            "This video requires YouTube sign-in (age-gated or bot verification). Click Open Settings to connect cookies."
+            if ($hasCookies) {
+                "YouTube rejected your cookies or requires fresh sign-in. Click Open Settings to update cookies."
+            } else {
+                "This video requires YouTube sign-in (age-gated or bot verification). Click Open Settings to connect cookies."
+            }
         } else {
-            "$siteName requires a logged-in account or cookies for this media. Click Open Settings to connect cookies."
+            if ($hasCookies) {
+                "$siteName rejected your cookies or requires fresh login. Click Open Settings to update cookies."
+            } else {
+                "$siteName requires a logged-in account or cookies for this media. Click Open Settings to connect cookies."
+            }
         }
         Show-Toast $authTitle $authBody $tag '' '' '' 'Open Settings' 'cliptoast:settings' -IncludeLogAction
         exit 1
